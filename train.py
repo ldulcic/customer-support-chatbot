@@ -2,10 +2,11 @@ import os
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
-from torch.nn.utils import clip_grad_norm
+from torch.nn.utils import clip_grad_norm_
 from dataset import dataset_factory
 from model.model import Encoder, Decoder, Seq2Seq
 from util import cuda
+from constants import CUDA
 
 
 def save_model(model, epoch, val_loss):
@@ -26,7 +27,7 @@ def evaluate(model, val_iter, vocab_size, padding_idx):
         # calculate batch loss
         loss = F.nll_loss(outputs.view(-1, vocab_size), answer[1:].view(-1),
                           ignore_index=padding_idx)  # answer[1:] skip <sos> token
-        total_loss += loss.data[0]
+        total_loss += loss.item()
 
     return total_loss / len(val_iter)
 
@@ -46,10 +47,10 @@ def train(model, optimizer, train_iter, vocab_size, grad_clip, padding_idx):
                           ignore_index=padding_idx)  # answer[1:] skip <sos> token
         loss.backward()
 
-        total_loss += loss.data[0]
+        total_loss += loss.item()
 
         # clip gradients to avoid exploding gradient
-        clip_grad_norm(model.parameters(), grad_clip)
+        clip_grad_norm_(model.parameters(), grad_clip)
 
         # update parameters
         optimizer.step()
@@ -58,6 +59,7 @@ def train(model, optimizer, train_iter, vocab_size, grad_clip, padding_idx):
 
 
 def main():
+    print("Using %s for training..." % 'GPU' if CUDA else 'CPU')
     vocab, train_iter, val_iter, test_iter = dataset_factory('twitter-customer-support')
 
     epochs = 100
