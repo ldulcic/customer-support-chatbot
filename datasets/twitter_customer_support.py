@@ -1,14 +1,14 @@
 from torchtext import data
 from constants import SOS_TOKEN, EOS_TOKEN, CUDA
-import preprocessor as p
+#import preprocessor as p
 
 
-def tokenize(sent):
-    print(p.tokenize(p.clean(sent)))
-    return p.tokenize(p.clean(sent))
+# def tokenize(sent):
+#     print(p.tokenize(p.clean(sent)))
+#     return p.tokenize(p.clean(sent))
 
 
-def load_dataset():
+def load_dataset(args):
     field = data.Field(init_token=SOS_TOKEN, eos_token=EOS_TOKEN,
                        tokenize='spacy', lower=True)
 
@@ -26,15 +26,12 @@ def load_dataset():
     )
 
     # build vocabulary
-    field.build_vocab(train, vectors='glove.twitter.27B.25d')
+    field.build_vocab(train, vectors=args.embedding_type)
 
     # create iterators for dataset
     train_iter, val_iter, test_iter = data.BucketIterator.splits(
-        (train, val, test), batch_size=32, sort_key=lambda x: max(len(x.question), len(x.answer)),
+        (train, val, test), batch_size=args.batch_size, sort_key=lambda x: max(len(x.question), len(x.answer)), # TODO should it be max (len, len) ?
         device=0 if CUDA else -1, repeat=False)
 
-    return field.vocab, train_iter, val_iter, test_iter
+    return field, train_iter, val_iter, test_iter
 
-
-if __name__ == '__main__':
-    load_dataset()

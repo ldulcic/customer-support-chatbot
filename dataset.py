@@ -5,12 +5,9 @@ dataset_map = {
 }
 
 
-def dataset_factory(dataset):
-    if dataset not in dataset_map:
+def dataset_factory(dataset_key, args):
+    if dataset_key not in dataset_map:
         raise ValueError("There is no \"%s\" dataset, available datasets are: (%s)"
-                         % (dataset, ', '.join(dataset_map.keys())))
-    return dataset_map[dataset]()
+                         % (dataset_key, ', '.join(dataset_map.keys())))
+    return dataset_map[dataset_key](args)
 
-
-if __name__ == '__main__':
-    dataset_factory('twitter-customer-support')
