@@ -107,3 +107,18 @@ class Seq2Seq(nn.Module):
             input_word = cuda(Variable(argmax))
 
         return outputs
+
+    def predict(self, src, sos_idx, eos_idx):
+        torch.no_grad()
+        encoder_outputs, h_n = self.encoder(src)
+
+        input_word = cuda(Variable(torch.LongTensor([sos_idx])))
+        hidden = h_n
+
+        out = []
+        while len(out) < 10 or out[-1] == eos_idx:
+            output, hidden = self.decoder(input_word, hidden)
+            _, argmax = output.squeeze(0).data.max(dim=0)
+            out.append(argmax.item())
+
+        return out
