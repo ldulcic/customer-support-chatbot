@@ -1,6 +1,10 @@
 from constants import CUDA
 
 
+def embedding_size_from_name(name: str):
+    return int(name.strip().split('.')[-1][:-1])
+
+
 def cuda(input):
     if CUDA:
         return input.cuda()
