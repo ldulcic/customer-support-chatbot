@@ -8,7 +8,7 @@ from util import cuda
 class Encoder(nn.Module):
     def __init__(self, vocab_size, embed_size, hidden_size, num_layers=1, bidirectional=False):
         """
-        Encoder for seq2seq model.
+        Encoder for seq2seq models.
 
         :param vocab_size: Size of vocabulary over which we operate.
         :param embed_size: Dimensionality of word embeddings.
@@ -38,7 +38,7 @@ class Encoder(nn.Module):
 class Decoder(nn.Module):
     def __init__(self, vocab_size, embed_size, hidden_size, num_layers=1):
         """
-        Decoder for seq2seq model.
+        Decoder for seq2seq models.
 
         :param vocab_size: Size of vocabulary over which we operate.
         :param embed_size: Dimensionality of word embeddings.
@@ -72,7 +72,7 @@ class Decoder(nn.Module):
 class Seq2Seq(nn.Module):
     def __init__(self, encoder, decoder, vocab_size):
         """
-        Encapsulates Seq2Seq model. Currently doesn't support encoder and decoder with different number of layers.
+        Encapsulates Seq2Seq models. Currently doesn't support encoder and decoder with different number of layers.
         TODO support encoder and decoder with different number of layers.
 
         :param encoder: Encoder.

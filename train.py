@@ -5,22 +5,22 @@ import torch.nn.functional as F
 import argparse
 from torch.nn.utils import clip_grad_norm_
 from dataset import dataset_factory
-from model.model import Encoder, Decoder, Seq2Seq
-from serialization import save_field_and_config, save_model
+from model import model_factory
+from serialization import save_object, save_model
 from util import cuda, embedding_size_from_name
 from constants import CUDA
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Script for training seq2seq chatbot.')
-    parser.add_argument('--max-epochs', type=int, default=100, help='Max number of epochs model will be trained.')
+    parser.add_argument('--max-epochs', type=int, default=100, help='Max number of epochs models will be trained.')
     parser.add_argument('--gradient-clip', type=float, default=5, help='Gradient clip value.')
     parser.add_argument('--batch-size', type=int, default=32, help='Batch size.')
     parser.add_argument('--learning-rate', type=float, default=1e-4, help='Initial learning rate.')
     parser.add_argument('--train-embeddings', action='store_true',
                         help='Should gradients be propagated to word embeddings.')
     parser.add_argument('--save-path', default='.save',
-                        help='Folder where model (and other configs) will be saved during training.')
+                        help='Folder where models (and other configs) will be saved during training.')
 
     # embeddings hyperparameters
     embeddings = parser.add_mutually_exclusive_group()
@@ -66,11 +66,11 @@ def parse_args():
 
 
 def evaluate(model, val_iter, vocab_size, padding_idx):
-    model.eval()  # put model in eval mode (this is important because of dropout)
+    model.eval()  # put models in eval mode (this is important because of dropout)
 
     total_loss = 0
     for batch in val_iter:
-        # calculate model predictions
+        # calculate models predictions
         question, answer = cuda(batch.question), cuda(batch.answer)
         outputs = model(question, answer)
 
@@ -83,12 +83,12 @@ def evaluate(model, val_iter, vocab_size, padding_idx):
 
 
 def train(model, optimizer, train_iter, vocab_size, grad_clip, padding_idx):
-    model.train()  # put model in train mode (this is important because of dropout)
+    model.train()  # put models in train mode (this is important because of dropout)
 
     optimizer.zero_grad()
     total_loss = 0
     for batch in train_iter:
-        # calculate model predictions
+        # calculate models predictions
         question, answer = cuda(batch.question), cuda(batch.answer)
         outputs = model(question, answer)
 
@@ -114,43 +114,29 @@ def main():
     field, train_iter, val_iter, test_iter = dataset_factory('twitter-customer-support', args)
 
     print('Saving field and args...', end='')
-    save_field_and_config(args.save_path, field, args)
+    save_object(field, args.save_path + os.path.sep + 'field.dill')
+    save_object(args, args.save_path + os.path.sep + 'args.dill')
     print('Done')
 
     vocab_size = len(field.vocab)
     padding_idx = field.vocab.stoi['<pad>']
 
-    # init encoder and decoder
-    encoder = Encoder(vocab_size=vocab_size, embed_size=args.embedding_size, hidden_size=args.encoder_hidden_size,
-                      num_layers=args.encoder_num_layers, bidirectional=args.encoder_bidirectional)
-    decoder = Decoder(vocab_size=vocab_size, embed_size=args.embedding_size, hidden_size=args.decoder_hidden_size,
-                      num_layers=args.decoder_num_layers)
+    model = cuda(model_factory(args, field, vocab_size))
+    print(model)  # print models summary
 
-    # optionally load pre-trained embeddings
-    if args.embedding_type:
-        encoder.embed.weight.data.copy_(field.vocab.vectors)
-        decoder.embed.weight.data.copy_(field.vocab.vectors)
-
-    # whether we will propagate gradients to word embeddings
-    encoder.embed.weight.require_grads = args.train_embeddings
-    decoder.embed.weight.require_grads = args.train_embeddings
-
-    seq2seq = cuda(Seq2Seq(encoder, decoder, vocab_size))
-    print(seq2seq)  # print model summary
-
-    optimizer = optim.Adam(seq2seq.parameters(), lr=args.learning_rate)
+    optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
 
     best_val_loss = None
     for epoch in range(args.max_epochs):
         # calculate train and val loss
-        train_loss = train(seq2seq, optimizer, train_iter, vocab_size, args.gradient_clip, padding_idx)
-        val_loss = evaluate(seq2seq, val_iter, vocab_size, padding_idx)
+        train_loss = train(model, optimizer, train_iter, vocab_size, args.gradient_clip, padding_idx)
+        val_loss = evaluate(model, val_iter, vocab_size, padding_idx)
         print("[Epoch=%d] train_loss %f - val_loss %f " % (epoch, train_loss, val_loss), end='')
 
-        # save model if model achieved best val loss
+        # save models if models achieved best val loss
         if not best_val_loss or val_loss < best_val_loss:
             print('(Saving model...', end='')
-            save_model(args.save_path, seq2seq, epoch, val_loss)
+            save_model(args.save_path, model, epoch, val_loss)
             print('Done)', end='')
             best_val_loss = val_loss
         print()
