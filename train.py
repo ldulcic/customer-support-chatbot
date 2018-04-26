@@ -126,20 +126,26 @@ def main():
 
     optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
 
-    best_val_loss = None
-    for epoch in range(args.max_epochs):
-        # calculate train and val loss
-        train_loss = train(model, optimizer, train_iter, vocab_size, args.gradient_clip, padding_idx)
-        val_loss = evaluate(model, val_iter, vocab_size, padding_idx)
-        print("[Epoch=%d] train_loss %f - val_loss %f " % (epoch, train_loss, val_loss), end='')
+    try:
+        best_val_loss = None
+        for epoch in range(args.max_epochs):
+            # calculate train and val loss
+            train_loss = train(model, optimizer, train_iter, vocab_size, args.gradient_clip, padding_idx)
+            val_loss = evaluate(model, val_iter, vocab_size, padding_idx)
+            print("[Epoch=%d/%d] train_loss %f - val_loss %f " % (epoch + 1, args.max_epochs, train_loss, val_loss), end='')
 
-        # save models if models achieved best val loss
-        if not best_val_loss or val_loss < best_val_loss:
-            print('(Saving model...', end='')
-            save_model(args.save_path, model, epoch, val_loss)
-            print('Done)', end='')
-            best_val_loss = val_loss
-        print()
+            # save models if models achieved best val loss
+            if not best_val_loss or val_loss < best_val_loss:
+                print('(Saving model...', end='')
+                save_model(args.save_path, model, epoch, val_loss)
+                print('Done)', end='')
+                best_val_loss = val_loss
+            print()
+    except KeyboardInterrupt:
+        print('[Ctrl-C] Training stopped.')
+
+    test_loss = evaluate(model, test_iter, vocab_size, padding_idx)
+    print("Test loss %f" % test_loss)
 
 
 if __name__ == '__main__':
