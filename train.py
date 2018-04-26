@@ -1,12 +1,12 @@
 import os
-import torch
+from datetime import datetime
 import torch.optim as optim
 import torch.nn.functional as F
-import dill
 import argparse
 from torch.nn.utils import clip_grad_norm_
 from dataset import dataset_factory
 from model.model import Encoder, Decoder, Seq2Seq
+from serialization import save_field_and_config, save_model
 from util import cuda, embedding_size_from_name
 from constants import CUDA
 
@@ -19,6 +19,8 @@ def parse_args():
     parser.add_argument('--learning-rate', type=float, default=1e-4, help='Initial learning rate.')
     parser.add_argument('--train-embeddings', action='store_true',
                         help='Should gradients be propagated to word embeddings.')
+    parser.add_argument('--save-path', default='.save',
+                        help='Folder where model (and other configs) will be saved during training.')
 
     # embeddings hyperparameters
     embeddings = parser.add_mutually_exclusive_group()
@@ -56,15 +58,11 @@ def parse_args():
     if not args.embedding_size:
         args.embedding_size = embedding_size_from_name(args.embedding_type)
 
+    # add timestamp to save_path
+    args.save_path += os.path.sep + datetime.now().strftime("%Y-%m-%d-%H:%M")
+
     print(args)
     return args
-
-
-def save_model(model, epoch, val_loss, field):
-    if not os.path.isdir('.save'):
-        os.makedirs('.save')
-    torch.save(model.state_dict(), ".save/seq2seq-%d-%f.pt" % (epoch, val_loss))
-    dill.dump(field, open('.save/field', 'wb'))
 
 
 def evaluate(model, val_iter, vocab_size, padding_idx):
@@ -111,9 +109,13 @@ def train(model, optimizer, train_iter, vocab_size, grad_clip, padding_idx):
 
 
 def main():
-    print("Using %s for training..." % ('GPU' if CUDA else 'CPU'))
+    print("Using %s for training" % ('GPU' if CUDA else 'CPU'))
     args = parse_args()
     field, train_iter, val_iter, test_iter = dataset_factory('twitter-customer-support', args)
+
+    print('Saving field and args...', end='')
+    save_field_and_config(args.save_path, field, args)
+    print('Done')
 
     vocab_size = len(field.vocab)
     padding_idx = field.vocab.stoi['<pad>']
@@ -143,13 +145,15 @@ def main():
         # calculate train and val loss
         train_loss = train(seq2seq, optimizer, train_iter, vocab_size, args.gradient_clip, padding_idx)
         val_loss = evaluate(seq2seq, val_iter, vocab_size, padding_idx)
-        print("[Epoch=%d] train_loss %f - val_loss %f" % (epoch, train_loss, val_loss))
+        print("[Epoch=%d] train_loss %f - val_loss %f " % (epoch, train_loss, val_loss), end='')
 
         # save model if model achieved best val loss
         if not best_val_loss or val_loss < best_val_loss:
-            print('Saving model...')
-            save_model(seq2seq, epoch, val_loss, field)
+            print('(Saving model...', end='')
+            save_model(args.save_path, seq2seq, epoch, val_loss)
+            print('Done)', end='')
             best_val_loss = val_loss
+        print()
 
 
 if __name__ == '__main__':
