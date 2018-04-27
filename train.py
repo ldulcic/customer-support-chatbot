@@ -121,7 +121,7 @@ def main():
     vocab_size = len(field.vocab)
     padding_idx = field.vocab.stoi['<pad>']
 
-    model = cuda(model_factory(args, field, vocab_size))
+    model = cuda(model_factory(args, field, vocab_size, padding_idx))
     print(model)  # print models summary
 
     optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)

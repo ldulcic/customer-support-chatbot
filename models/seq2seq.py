@@ -6,7 +6,7 @@ from util import cuda
 
 
 class Encoder(nn.Module):
-    def __init__(self, vocab_size, embed_size, hidden_size, num_layers=1, bidirectional=False):
+    def __init__(self, vocab_size, embed_size, hidden_size, padding_idx, num_layers=1, bidirectional=False):
         """
         Encoder for seq2seq models.
 
@@ -25,7 +25,7 @@ class Encoder(nn.Module):
             - **h_n** (num_layers * num_directions, batch, hidden_size): RNN outputs for all layers for t=seq_len (last timestamp)
         """
         super(Encoder, self).__init__()
-        self.embed = nn.Embedding(num_embeddings=vocab_size, embedding_dim=embed_size)
+        self.embed = nn.Embedding(num_embeddings=vocab_size, embedding_dim=embed_size, padding_idx=padding_idx)
         self.rnn = nn.GRU(input_size=embed_size, hidden_size=hidden_size, num_layers=num_layers,
                           bidirectional=bidirectional)
 
@@ -36,7 +36,7 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, vocab_size, embed_size, hidden_size, num_layers=1):
+    def __init__(self, vocab_size, embed_size, hidden_size, padding_idx, num_layers=1):
         """
         Decoder for seq2seq models.
 
@@ -57,7 +57,7 @@ class Decoder(nn.Module):
             - **hidden** (num_layers, batch, hidden_size): New RNN hidden state.
         """
         super(Decoder, self).__init__()
-        self.embed = nn.Embedding(num_embeddings=vocab_size, embedding_dim=embed_size)
+        self.embed = nn.Embedding(num_embeddings=vocab_size, embedding_dim=embed_size, padding_idx=padding_idx)
         self.rnn = nn.GRU(input_size=embed_size, hidden_size=hidden_size, num_layers=num_layers)
         self.out = nn.Linear(in_features=hidden_size, out_features=vocab_size)
 
@@ -109,16 +109,17 @@ class Seq2Seq(nn.Module):
         return outputs
 
     def predict(self, src, sos_idx, eos_idx):
-        torch.no_grad()
         encoder_outputs, h_n = self.encoder(src)
 
         input_word = cuda(Variable(torch.LongTensor([sos_idx])))
         hidden = h_n
 
         out = []
-        while len(out) < 10 or out[-1] == eos_idx:
+        while len(out) < 10:
             output, hidden = self.decoder(input_word, hidden)
             _, argmax = output.squeeze(0).data.max(dim=0)
             out.append(argmax.item())
+            if out[-1] == eos_idx:
+                break
 
         return out
