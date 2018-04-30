@@ -1,6 +1,3 @@
-import torch
-
-
 SOS_TOKEN = '<sos>'  # start of sentence token
 EOS_TOKEN = '<eos>'  # end of sentence token
-CUDA = torch.cuda.is_available()
+PAD_TOKEN = '<pad>'  # pad token

@@ -1,14 +1,16 @@
 import os
-from datetime import datetime
+import argparse
+import torch
+import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-import argparse
 from torch.nn.utils import clip_grad_norm_
 from dataset import dataset_factory
 from model import model_factory
 from serialization import save_object, save_model
-from util import cuda, embedding_size_from_name
-from constants import CUDA
+from constants import PAD_TOKEN
+from datetime import datetime
+from util import embedding_size_from_name
 
 
 def parse_args():
@@ -21,6 +23,10 @@ def parse_args():
                         help='Should gradients be propagated to word embeddings.')
     parser.add_argument('--save-path', default='.save',
                         help='Folder where models (and other configs) will be saved during training.')
+
+    # cuda
+    parser.add_argument('--cuda', action='store_true', default=False, help='Use cuda if available.')
+    parser.add_argument('--multi-gpu', action='store_true', default=False, help='Use multiple GPUs if available.')
 
     # embeddings hyperparameters
     embeddings = parser.add_mutually_exclusive_group()
@@ -71,7 +77,7 @@ def evaluate(model, val_iter, vocab_size, padding_idx):
     total_loss = 0
     for batch in val_iter:
         # calculate models predictions
-        question, answer = cuda(batch.question), cuda(batch.answer)
+        question, answer = batch.question, batch.answer
         outputs = model(question, answer)
 
         # calculate batch loss
@@ -89,7 +95,7 @@ def train(model, optimizer, train_iter, vocab_size, grad_clip, padding_idx):
     total_loss = 0
     for batch in train_iter:
         # calculate models predictions
-        question, answer = cuda(batch.question), cuda(batch.answer)
+        question, answer = batch.question, batch.answer
         outputs = model(question, answer)
 
         # calculate loss and backpropagate errors
@@ -109,9 +115,13 @@ def train(model, optimizer, train_iter, vocab_size, grad_clip, padding_idx):
 
 
 def main():
-    print("Using %s for training" % ('GPU' if CUDA else 'CPU'))
     args = parse_args()
-    field, train_iter, val_iter, test_iter = dataset_factory('twitter-customer-support', args)
+    cuda = torch.cuda.is_available() and args.cuda
+    torch.set_default_tensor_type(torch.cuda.FloatTensor if cuda else torch.FloatTensor)
+    # device = torch.device('cuda' if cuda else 'cpu')
+
+    print("Using %s for training" % ('GPU' if cuda else 'CPU'))
+    field, train_iter, val_iter, test_iter = dataset_factory('twitter-customer-support', args, cuda)
 
     print('Saving field and args...', end='')
     save_object(field, args.save_path + os.path.sep + 'field.dill')
@@ -119,9 +129,11 @@ def main():
     print('Done')
 
     vocab_size = len(field.vocab)
-    padding_idx = field.vocab.stoi['<pad>']
+    padding_idx = field.vocab.stoi[PAD_TOKEN]
 
-    model = cuda(model_factory(args, field, vocab_size, padding_idx))
+    model = model_factory(args, field, vocab_size, padding_idx)
+    if cuda and args.multi_gpu:
+        model = nn.DataParallel(model, dim=1)  # if we were using batch_first we'd have to use dim=0
     print(model)  # print models summary
 
     optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
