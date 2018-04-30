@@ -3,7 +3,7 @@ import spacy
 from torchtext import data
 from sklearn.model_selection import train_test_split
 #from torchtext.datasets.translation import TranslationDataset
-from constants import SOS_TOKEN, EOS_TOKEN, CUDA
+from constants import SOS_TOKEN, EOS_TOKEN
 import preprocessor as prepro
 
 
@@ -34,7 +34,7 @@ def split_dataset(path, random_state=287):
         fd.writelines(test)
 
 
-def load_dataset(args):
+def load_dataset(args, cuda):
     spacy_en = spacy.load('en')
 
     def tokenize(text):
@@ -69,7 +69,7 @@ def load_dataset(args):
     # create iterators for dataset
     train_iter, val_iter, test_iter = data.BucketIterator.splits(
         (train, val, test), batch_size=args.batch_size, sort_key=lambda x: max(len(x.question), len(x.answer)), # TODO should it be max (len, len) ?
-        device=0 if CUDA else -1, repeat=False)
+        device=0 if cuda else -1, repeat=False)
 
     return field, train_iter, val_iter, test_iter
 

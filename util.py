@@ -1,15 +1,7 @@
-from constants import CUDA
 
 
-def embedding_size_from_name(name: str):
+def embedding_size_from_name(name):
     return int(name.strip().split('.')[-1][:-1])
-
-
-def cuda(input):
-    if CUDA:
-        return input.cuda()
-    else:
-        return input
 
 
 # convert twitter customer support dataset from 1-line Q 1-line A to tsv (Q <tab> A)

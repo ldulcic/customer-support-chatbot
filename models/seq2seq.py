@@ -1,8 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd import Variable
-from util import cuda
 
 
 class Encoder(nn.Module):
@@ -94,24 +92,24 @@ class Seq2Seq(nn.Module):
     def forward(self, src, trg):
         batch_size = src.size(1)
         trg_seq_len = trg.size(0) - 1  # - 1 because first token in every sequence is <sos> TODO note this in docs (dimensions don't match because we subtracted 1 from seq_len)
-        outputs = cuda(Variable(torch.zeros(trg_seq_len, batch_size, self.vocab_size)))
+        outputs = torch.zeros(trg_seq_len, batch_size, self.vocab_size)
 
         encoder_outputs, h_n = self.encoder(src)
 
         hidden = h_n  # output of all encoder layers for t=seq_len
-        input_word = cuda(Variable(trg.data[0], requires_grad=False))  # sos for whole batch TODO check if we need to wrap tensor in new variable or just call trg[0] on existing variable, what's the difference?
+        input_word = trg[0]  # sos for whole batch TODO check if we need to wrap tensor in new variable or just call trg[0] on existing variable, what's the difference?
         for t in range(trg_seq_len):
             output, hidden = self.decoder(input_word, hidden)
             outputs[t] = output
-            max, argmax = output.data.max(dim=1)
-            input_word = cuda(Variable(argmax))
+            max, argmax = output.max(dim=1)
+            input_word = argmax
 
         return outputs
 
     def predict(self, src, sos_idx, eos_idx):
         encoder_outputs, h_n = self.encoder(src)
 
-        input_word = cuda(Variable(torch.LongTensor([sos_idx])))
+        input_word = torch.tensor(sos_idx)
         hidden = h_n
 
         out = []
