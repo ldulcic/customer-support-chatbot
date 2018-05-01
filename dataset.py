@@ -5,9 +5,9 @@ dataset_map = {
 }
 
 
-def dataset_factory(dataset_key, args, cuda):
+def dataset_factory(dataset_key, args, device):
     if dataset_key not in dataset_map:
         raise ValueError("There is no \"%s\" dataset, available datasets are: (%s)"
                          % (dataset_key, ', '.join(dataset_map.keys())))
-    return dataset_map[dataset_key](args, cuda)
+    return dataset_map[dataset_key](args, device)
 

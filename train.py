@@ -118,10 +118,12 @@ def main():
     args = parse_args()
     cuda = torch.cuda.is_available() and args.cuda
     torch.set_default_tensor_type(torch.cuda.FloatTensor if cuda else torch.FloatTensor)
-    # device = torch.device('cuda' if cuda else 'cpu')
+    device = torch.device('cuda' if cuda else 'cpu')
 
     print("Using %s for training" % ('GPU' if cuda else 'CPU'))
-    field, train_iter, val_iter, test_iter = dataset_factory('twitter-customer-support', args, cuda)
+    print('Loading dataset...', end='', flush=True)
+    field, train_iter, val_iter, test_iter = dataset_factory('twitter-customer-support', args, device)
+    print('Done.')
 
     print('Saving field and args...', end='')
     save_object(field, args.save_path + os.path.sep + 'field.dill')
@@ -141,10 +143,11 @@ def main():
     try:
         best_val_loss = None
         for epoch in range(args.max_epochs):
+            start = datetime.now()
             # calculate train and val loss
             train_loss = train(model, optimizer, train_iter, vocab_size, args.gradient_clip, padding_idx)
             val_loss = evaluate(model, val_iter, vocab_size, padding_idx)
-            print("[Epoch=%d/%d] train_loss %f - val_loss %f " % (epoch + 1, args.max_epochs, train_loss, val_loss), end='')
+            print("[Epoch=%d/%d] train_loss %f - val_loss %f time=%s " % (epoch + 1, args.max_epochs, train_loss, val_loss, datetime.now() - start), end='')
 
             # save models if models achieved best val loss
             if not best_val_loss or val_loss < best_val_loss:
