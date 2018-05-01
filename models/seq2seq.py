@@ -109,7 +109,7 @@ class Seq2Seq(nn.Module):
     def predict(self, src, sos_idx, eos_idx):
         encoder_outputs, h_n = self.encoder(src)
 
-        input_word = torch.tensor(sos_idx)
+        input_word = torch.tensor([sos_idx])
         hidden = h_n
 
         out = []

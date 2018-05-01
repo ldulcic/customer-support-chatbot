@@ -1,9 +1,10 @@
+import torch
 import os
 import spacy
 from torchtext import data
 from sklearn.model_selection import train_test_split
 #from torchtext.datasets.translation import TranslationDataset
-from constants import SOS_TOKEN, EOS_TOKEN
+from constants import SOS_TOKEN, EOS_TOKEN, PAD_TOKEN
 import preprocessor as prepro
 
 
@@ -34,7 +35,7 @@ def split_dataset(path, random_state=287):
         fd.writelines(test)
 
 
-def load_dataset(args, cuda):
+def load_dataset(args, device):
     spacy_en = spacy.load('en')
 
     def tokenize(text):
@@ -46,8 +47,9 @@ def load_dataset(args, cuda):
     def m(e):
         return hasattr(e, 'answer') and hasattr(e, 'question') and e.answer and e.question
 
-    field = data.Field(init_token=SOS_TOKEN, eos_token=EOS_TOKEN,
-                       tokenize=tokenize, lower=True)
+    field = data.Field(init_token=SOS_TOKEN, eos_token=EOS_TOKEN, pad_token=PAD_TOKEN,
+                       tokenize=tokenize, lower=True, fix_length=100,
+                       tensor_type=torch.cuda.LongTensor if device.type == 'cuda' else torch.LongTensor)
 
     # load dataset
     train, val, test = data.TabularDataset.splits(
@@ -69,7 +71,7 @@ def load_dataset(args, cuda):
     # create iterators for dataset
     train_iter, val_iter, test_iter = data.BucketIterator.splits(
         (train, val, test), batch_size=args.batch_size, sort_key=lambda x: max(len(x.question), len(x.answer)), # TODO should it be max (len, len) ?
-        device=0 if cuda else -1, repeat=False)
+        device=device, repeat=False)
 
     return field, train_iter, val_iter, test_iter
 
