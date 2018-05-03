@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-import os
 import torch
 import argparse
 from model import model_factory
@@ -23,7 +22,7 @@ def prepare_question(question, field, device):
 
 
 def main():
-    os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+    # os.environ['CUDA_VISIBLE_DEVICES'] = '1'
     torch.set_grad_enabled(False)
     args = parse_args()
     print('parsed args')
