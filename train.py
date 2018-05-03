@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import os
 import argparse
 import torch
@@ -78,11 +80,11 @@ def evaluate(model, val_iter, vocab_size, padding_idx):
     for batch in val_iter:
         # calculate models predictions
         question, answer = batch.question, batch.answer
-        outputs = model(question, answer)
+        logits = model(question, answer)
 
         # calculate batch loss
-        loss = F.nll_loss(outputs.view(-1, vocab_size), answer[1:].view(-1),
-                          ignore_index=padding_idx)  # answer[1:] skip <sos> token
+        loss = F.cross_entropy(logits.view(-1, vocab_size), answer[1:].view(-1),
+                               ignore_index=padding_idx)  # answer[1:] skip <sos> token
         total_loss += loss.item()
 
     return total_loss / len(val_iter)
@@ -96,11 +98,11 @@ def train(model, optimizer, train_iter, vocab_size, grad_clip, padding_idx):
     for batch in train_iter:
         # calculate models predictions
         question, answer = batch.question, batch.answer
-        outputs = model(question, answer)
+        logits = model(question, answer)
 
         # calculate loss and backpropagate errors
-        loss = F.nll_loss(outputs.view(-1, vocab_size), answer[1:].view(-1),
-                          ignore_index=padding_idx)  # answer[1:] skip <sos> token
+        loss = F.cross_entropy(logits.view(-1, vocab_size), answer[1:].view(-1),
+                               ignore_index=padding_idx)  # answer[1:] skip <sos> token
         loss.backward()
 
         total_loss += loss.item()
@@ -147,7 +149,8 @@ def main():
             # calculate train and val loss
             train_loss = train(model, optimizer, train_iter, vocab_size, args.gradient_clip, padding_idx)
             val_loss = evaluate(model, val_iter, vocab_size, padding_idx)
-            print("[Epoch=%d/%d] train_loss %f - val_loss %f time=%s " % (epoch + 1, args.max_epochs, train_loss, val_loss, datetime.now() - start), end='')
+            print("[Epoch=%d/%d] train_loss %f - val_loss %f time=%s " %
+                  (epoch + 1, args.max_epochs, train_loss, val_loss, datetime.now() - start), end='')
 
             # save models if models achieved best val loss
             if not best_val_loss or val_loss < best_val_loss:

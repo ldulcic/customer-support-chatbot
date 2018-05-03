@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+import random
 
 
 class Encoder(nn.Module):
@@ -63,7 +63,6 @@ class Decoder(nn.Module):
         embedded = self.embed(input).unsqueeze(0)  # (1,B,N)
         _, hidden = self.rnn(embedded, last_hidden)
         output = self.out(hidden[-1])  # hidden[-1] - hidden output of last layer
-        output = F.log_softmax(output, dim=1)  # log softmax over logits to produce probability distributions over vocabulary
         return output, hidden
 
 
@@ -89,7 +88,7 @@ class Seq2Seq(nn.Module):
         self.decoder = decoder
         self.vocab_size = vocab_size
 
-    def forward(self, src, trg):
+    def forward(self, src, trg, teacher_forcing_ratio=0.5):
         batch_size = src.size(1)
         trg_seq_len = trg.size(0) - 1  # - 1 because first token in every sequence is <sos> TODO note this in docs (dimensions don't match because we subtracted 1 from seq_len)
         outputs = torch.zeros(trg_seq_len, batch_size, self.vocab_size)
@@ -97,12 +96,17 @@ class Seq2Seq(nn.Module):
         encoder_outputs, h_n = self.encoder(src)
 
         hidden = h_n  # output of all encoder layers for t=seq_len
-        input_word = trg[0]  # sos for whole batch TODO check if we need to wrap tensor in new variable or just call trg[0] on existing variable, what's the difference?
+        input_word = trg[0]  # sos for whole batch
         for t in range(trg_seq_len):
             output, hidden = self.decoder(input_word, hidden)
             outputs[t] = output
-            max, argmax = output.max(dim=1)
-            input_word = argmax
+
+            teacher_forcing = random.random() < teacher_forcing_ratio
+            if teacher_forcing:
+                input_word = trg[t + 1]  # +1 because trg contains <sos> at the beginning
+            else:
+                max, argmax = output.max(dim=1)
+                input_word = argmax
 
         return outputs
 
