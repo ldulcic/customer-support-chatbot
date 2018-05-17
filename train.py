@@ -25,6 +25,8 @@ def parse_args():
                         help='Should gradients be propagated to word embeddings.')
     parser.add_argument('--save-path', default='.save',
                         help='Folder where models (and other configs) will be saved during training.')
+    parser.add_argument('--save-every-epoch', action='store_true',
+                        help='Save model every epoch regardless of validation loss.')
 
     # cuda
     parser.add_argument('--cuda', action='store_true', default=False, help='Use cuda if available.')
@@ -153,9 +155,9 @@ def main():
                   (epoch + 1, args.max_epochs, train_loss, val_loss, datetime.now() - start), end='')
 
             # save models if models achieved best val loss
-            if not best_val_loss or val_loss < best_val_loss:
+            if args.save_every_epoch or not best_val_loss or val_loss < best_val_loss:
                 print('(Saving model...', end='')
-                save_model(args.save_path, model, epoch, val_loss)
+                save_model(args.save_path, model, epoch, train_loss, val_loss)
                 print('Done)', end='')
                 best_val_loss = val_loss
             print()

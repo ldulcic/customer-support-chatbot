@@ -36,6 +36,6 @@ def load_object(path):
     return obj
 
 
-def save_model(dir_path, model, epoch, val_loss):
+def save_model(dir_path, model, epoch, train_loss, val_loss):
     ensure_dir_exists(dir_path)
-    torch.save(model.state_dict(), "%s/seq2seq-%d-%f.pt" % (dir_path, epoch, val_loss))
+    torch.save(model.state_dict(), "%s/seq2seq-%d-%f-%f.pt" % (dir_path, epoch, train_loss, val_loss))
