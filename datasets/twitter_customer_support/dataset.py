@@ -47,7 +47,7 @@ def load_dataset(args, device):
 
     # create iterators for dataset
     train_iter, val_iter, test_iter = data.BucketIterator.splits(
-        (train, val, test), batch_size=args.batch_size, sort_key=lambda x: max(len(x.question), len(x.answer)), # TODO should it be max (len, len) ?
+        (train, val, test), batch_size=args.batch_size, sort_key=lambda x: len(x.question),
         device=device, repeat=False)
 
     return field, train_iter, val_iter, test_iter
