@@ -11,7 +11,7 @@ Following attentions are implemented: global, local-m, local-p.
 Following attention score functions are implemented: dot, general and concat.
 
 These concepts were introduced in following papers:
-**Neural Machine Translation by Jointly Learning to Align and Translate (Bahdanau et al., 2014)**
+**Neural Machine Translation by Jointly Learning to Align and Translate (Bahdanau et al., 2015)**
 **Effective Approaches to Attention-based Neural Machine Translation (Luong et al., 2015)** 
 """
 
@@ -339,26 +339,26 @@ class ConcatAttention(AttentionScore):
         return scores.squeeze(2).transpose(0, 1)
 
 
-if __name__ == '__main__':
-    batch_size = 2
-    hidden_size = 10
-    encoder_hidden_size = 6
-    seq_len = 6
-    decoder_hidden_size = 5
-    t = 3
-
-    torch.manual_seed(287)
-
-    hidden = torch.randn(batch_size, decoder_hidden_size)
-    enc_out = torch.randn(seq_len, batch_size, encoder_hidden_size)
-
-    score = ConcatAttention(hidden_size, encoder_hidden_size, decoder_hidden_size)
-    # att = GeneralAttention(encoder_hidden_size, decoder_hidden_size)
-    # att = DotAttention()
-
-    # att = GlobalAttention(score)
-    att = LocalPredictiveAttention(score, hidden_size, decoder_hidden_size, 1)
-
-    attn_weights, context = att(t, hidden, enc_out)
-    print_dim('attn_weights', attn_weights)
-    print_dim('context', context)
+# if __name__ == '__main__':
+#     batch_size = 2
+#     hidden_size = 10
+#     encoder_hidden_size = 6
+#     seq_len = 6
+#     decoder_hidden_size = 5
+#     t = 3
+#
+#     torch.manual_seed(287)
+#
+#     hidden = torch.randn(batch_size, decoder_hidden_size)
+#     enc_out = torch.randn(seq_len, batch_size, encoder_hidden_size)
+#
+#     score = ConcatAttention(hidden_size, encoder_hidden_size, decoder_hidden_size)
+#     # att = GeneralAttention(encoder_hidden_size, decoder_hidden_size)
+#     # att = DotAttention()
+#
+#     # att = GlobalAttention(score)
+#     att = LocalPredictiveAttention(score, hidden_size, decoder_hidden_size, 1)
+#
+#     attn_weights, context = att(t, hidden, enc_out)
+#     print_dim('attn_weights', attn_weights)
+#     print_dim('context', context)
