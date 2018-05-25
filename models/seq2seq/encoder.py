@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 def encoder_factory(args, vocab_size, padding_idx):
     return SimpleEncoder(
         vocab_size=vocab_size,
-        embed_size=args.embed_size,
+        embed_size=args.embedding_size,
         hidden_size=args.encoder_hidden_size,
         padding_idx=padding_idx,
         num_layers=args.encoder_num_layers,
