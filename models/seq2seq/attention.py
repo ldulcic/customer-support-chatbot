@@ -11,9 +11,34 @@ Following attentions are implemented: global, local-m, local-p.
 Following attention score functions are implemented: dot, general and concat.
 
 These concepts were introduced in following papers:
-**Neural Machine Translation by Jointly Learning to Align and Translate (Bahdanau et al., 2015)**
+**Neural Machine Translation by Jointly Learning to Align and Translate (Bahdanau et al., 2014)**
 **Effective Approaches to Attention-based Neural Machine Translation (Luong et al., 2015)** 
 """
+
+attention_map = {
+    'global': lambda args, score: GlobalAttention(score),
+    'local-m': lambda args, score: LocalMonotonicAttention(score, args.half_window_size),
+    'local-p': lambda args, score: LocalPredictiveAttention(score, args.local_p_hidden_size, args.decoder_hidden_size,
+                                                            args.half_window_size)
+}
+
+score_map = {
+    'dot': lambda args: DotAttention(),
+    'general': lambda args: GeneralAttention(args.encoder_hidden_size, args.decoder_hidden_size),
+    'concat': lambda args: ConcatAttention(args.concat_attention_hidden_size, args.encoder_hidden_size,
+                                           args.decoder_hidden_size)
+}
+
+
+def attention_factory(args):
+    """
+    Factory method for attention module.
+
+    :param args: script args.
+    :return: Instance of Attention interface based on provided args.
+    """
+    score = score_map[args.attention_score](args)
+    return attention_map[args.attention_type](args, score)
 
 
 class Attention(ABC, nn.Module):

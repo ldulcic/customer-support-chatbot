@@ -1,7 +1,9 @@
-
-
 def embedding_size_from_name(name):
     return int(name.strip().split('.')[-1][:-1])
+
+
+def print_dim(name, tensor):
+    print("%s -> %s" % (name, tensor.size()))
 
 
 # convert twitter customer support dataset from 1-line Q 1-line A to tsv (Q <tab> A)

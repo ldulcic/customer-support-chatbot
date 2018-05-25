@@ -2,6 +2,46 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from abc import ABC, abstractmethod
+from .attention import attention_factory
+
+
+def bahdanau_decoder_factory(args, attn, vocab_size, padding_idx):
+    return BahdanauDecoder(
+        attn=attn,
+        vocab_size=vocab_size,
+        embed_size=args.embed_size,
+        rnn_hidden_size=args.decoder_hidden_size,
+        encoder_hidden_size=args.decoder_hidden_size,
+        padding_idx=padding_idx,
+        num_layers=args.decoder_num_layers,
+        dropout=args.decoder_rnn_dropout
+    )
+
+
+def luong_decoder_factory(args, attn, vocab_size, padding_idx):
+    return LuongDecoder(
+        attn=attn,
+        vocab_size=vocab_size,
+        embed_size=args.embed_size,
+        rnn_hidden_size=args.decoder_hidden_size,
+        attn_hidden_projection_size=args.luong_attn_hidden_size,
+        encoder_hidden_size=args.decoder_hidden_size,
+        padding_idx=padding_idx,
+        num_layers=args.decoder_num_layers,
+        input_feed=args.luong_input_feed
+    )
+
+
+decoder_map = {
+    'bahdanau': bahdanau_decoder_factory,
+    'luong': luong_decoder_factory
+}
+
+
+def decoder_factory(args, vocab_size, padding_idx):
+    # TODO what if attention type is 'none' ?
+    attn = attention_factory(args)
+    return decoder_map[args.decoder_type](args, attn, vocab_size, padding_idx)
 
 
 class Decoder(ABC, nn.Module):
@@ -22,6 +62,7 @@ class Decoder(ABC, nn.Module):
         - **attn_weights** (batch, seq_len): (Optional) Attention weights. This value is returned only if decoder uses
         attention.
     """
+
     @abstractmethod
     def forward(self, t, input, last_hidden, encoder_outputs):
         pass
@@ -40,12 +81,14 @@ class Decoder(ABC, nn.Module):
 class BahdanauDecoder(Decoder):
     """
     Bahdanau decoder for seq2seq models. This decoder is called Bahdanau because it works like decoder from (Bahdanau et
-    al., 2015.) paper TODO give more details.
+    al., 2014.) paper TODO give more details.
+
+    TODO implement calculating initial hidden state as in paper.
 
     :param attn: Attention layer.
     :param vocab_size: Size of vocabulary over which we operate.
     :param embed_size: Dimensionality of word embeddings.
-    :param hidden_size: Dimensionality of RNN hidden representation.
+    :param rnn_hidden_size: Dimensionality of RNN hidden representation.
     :param encoder_hidden_size: Dimensionality of encoder hidden representation (important for calculating attention
                                 context)
     :param padding_idx: Index of pad token in vocabulary.
@@ -64,19 +107,22 @@ class BahdanauDecoder(Decoder):
         - **attn_weights** (batch, seq_len): (Optional) Attention weights. This value is returned only if decoder uses
         attention.
     """
-    def __init__(self, attn, vocab_size, embed_size, hidden_size, encoder_hidden_size, padding_idx, num_layers=1,
+
+    def __init__(self, attn, vocab_size, embed_size, rnn_hidden_size, encoder_hidden_size, padding_idx, num_layers=1,
                  dropout=0.2):
         super(BahdanauDecoder, self).__init__()
 
-        self._hidden_size = hidden_size
+        if rnn_hidden_size % 2 != 0:
+            raise ValueError('RNN hidden size must be divisible by 2 because of maxout layer.')
+
+        self._hidden_size = rnn_hidden_size
         self._num_layers = num_layers
 
         self.embed = nn.Embedding(num_embeddings=vocab_size, embedding_dim=embed_size, padding_idx=padding_idx)
-        self.rnn = nn.GRU(input_size=embed_size + encoder_hidden_size, hidden_size=hidden_size, num_layers=num_layers,
-                          dropout=dropout)
+        self.rnn = nn.GRU(input_size=embed_size + encoder_hidden_size, hidden_size=rnn_hidden_size,
+                          num_layers=num_layers, dropout=dropout)
         self.attn = attn
-        # TODO this is not how Bahdanau calculates output
-        self.out = nn.Linear(in_features=hidden_size, out_features=vocab_size)
+        self.out = nn.Linear(in_features=rnn_hidden_size / 2, out_features=vocab_size)
 
     @property
     def hidden_size(self):
@@ -94,9 +140,17 @@ class BahdanauDecoder(Decoder):
         rnn_input = torch.cat([embedded, context], dim=1)
         rnn_input = rnn_input.unsqueeze(0)  # (batch, embed + enc_h) -> (1, batch, embed + enc_h)
 
-        # calculate decoder output
+        # calculate rnn output
         _, hidden = self.rnn(rnn_input, last_hidden)
-        output = self.out(hidden[-1])  # hidden[-1] - hidden output of last layer
+
+        # maxout layer (with k=2)
+        top_layer_hidden = hidden[-1]  # (batch, rnn_hidden)
+        batch_size = top_layer_hidden.size(0)
+        maxout_input = hidden[-1].view(batch_size, -1, 2)  # (batch, rnn_hidden) -> (batch, rnn_hidden/2, 2) k=2
+        maxout, _ = maxout_input.max(dim=2)  # (batch, rnn_hidden/2)
+
+        # calculate logits
+        output = self.out(maxout)
 
         return output, hidden, attn_weights
 
@@ -111,7 +165,7 @@ class LuongDecoder(Decoder):
     :param embed_size: Dimensionality of word embeddings.
     :param rnn_hidden_size: Dimensionality of RNN hidden representation.
     :param attn_hidden_projection_size: Dimensionality of hidden state produced by combining RNN hidden state and
-    attention context. h_att = tanh( W * [c;h_rnn] )
+                                attention context. h_att = tanh( W * [c;h_rnn] )
     :param encoder_hidden_size: Dimensionality of encoder hidden representation (important for calculating attention
                                 context)
     :param padding_idx: Index of pad token in vocabulary.
@@ -132,6 +186,7 @@ class LuongDecoder(Decoder):
         - **attn_weights** (batch, seq_len): (Optional) Attention weights. This value is returned only if decoder uses
         attention.
     """
+
     def __init__(self, attn, vocab_size, embed_size, rnn_hidden_size, attn_hidden_projection_size, encoder_hidden_size,
                  padding_idx, num_layers=1, dropout=0.2, input_feed=False):
         super(LuongDecoder, self).__init__()
@@ -170,7 +225,7 @@ class LuongDecoder(Decoder):
         if self.input_feed:
             if self.previous_attn_hidden is None:
                 assert t == 0
-                # init previous attn_hidden to zeros in first timestamp
+                # init previous_attn_hidden to zeros in first timestamp
                 batch_size = embedded.size(0)
                 self.previous_attn_hidden = torch.zeros(batch_size, self.attn_hidden_projection_size)
             rnn_input = torch.cat([rnn_input, self.previous_attn_hidden], dim=1)
