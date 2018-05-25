@@ -9,7 +9,7 @@ def bahdanau_decoder_factory(args, attn, vocab_size, padding_idx):
     return BahdanauDecoder(
         attn=attn,
         vocab_size=vocab_size,
-        embed_size=args.embed_size,
+        embed_size=args.embedding_size,
         rnn_hidden_size=args.decoder_hidden_size,
         encoder_hidden_size=args.decoder_hidden_size,
         padding_idx=padding_idx,
@@ -22,7 +22,7 @@ def luong_decoder_factory(args, attn, vocab_size, padding_idx):
     return LuongDecoder(
         attn=attn,
         vocab_size=vocab_size,
-        embed_size=args.embed_size,
+        embed_size=args.embedding_size,
         rnn_hidden_size=args.decoder_hidden_size,
         attn_hidden_projection_size=args.luong_attn_hidden_size,
         encoder_hidden_size=args.decoder_hidden_size,
@@ -122,7 +122,7 @@ class BahdanauDecoder(Decoder):
         self.rnn = nn.GRU(input_size=embed_size + encoder_hidden_size, hidden_size=rnn_hidden_size,
                           num_layers=num_layers, dropout=dropout)
         self.attn = attn
-        self.out = nn.Linear(in_features=rnn_hidden_size / 2, out_features=vocab_size)
+        self.out = nn.Linear(in_features=rnn_hidden_size // 2, out_features=vocab_size)
 
     @property
     def hidden_size(self):

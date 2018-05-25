@@ -35,7 +35,7 @@ class Seq2Seq(nn.Module):
         hidden = h_n[:self.decoder.num_layers]  # output of all encoder layers for t=seq_len
         input_word = trg[0]  # sos for whole batch
         for t in range(trg_seq_len):
-            output, hidden = self.decoder(input_word, hidden, encoder_outputs)
+            output, hidden, attn_weights = self.decoder(t, input_word, hidden, encoder_outputs)
             outputs[t] = output
 
             teacher_forcing = random.random() < teacher_forcing_ratio

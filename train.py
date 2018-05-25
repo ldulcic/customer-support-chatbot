@@ -72,7 +72,7 @@ def parse_args():
     attention_args = parser.add_argument_group('Attention', 'Attention hyperparameters.')
     attention_args.add_argument('--attention-type', choices=['none', 'global', 'local-m', 'local-p'], default='none',
                                 help='Attention type.')
-    attention_args.add_argument('--attention-score', choices=['dot', 'general', 'concat'],
+    attention_args.add_argument('--attention-score', choices=['dot', 'general', 'concat'], default='dot',
                                 help='Attention score function type.')
     attention_args.add_argument('--half-window-size', type=int, default=5,
                                 help='D parameter from Luong et al. paper. Used only for local attention.')
