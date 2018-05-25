@@ -29,8 +29,9 @@ def parse_args():
                         help='Save model every epoch regardless of validation loss.')
 
     # cuda
-    parser.add_argument('--cuda', action='store_true', default=False, help='Use cuda if available.')
-    parser.add_argument('--multi-gpu', action='store_true', default=False, help='Use multiple GPUs if available.')
+    gpu_args = parser.add_argument_group('GPU', 'GPU related settings.')
+    gpu_args.add_argument('--cuda', action='store_true', default=False, help='Use cuda if available.')
+    gpu_args.add_argument('--multi-gpu', action='store_true', default=False, help='Use multiple GPUs if available.')
 
     # embeddings hyperparameters
     embeddings = parser.add_mutually_exclusive_group()
@@ -46,17 +47,39 @@ def parse_args():
                                      'glove.6B.200d',
                                      'glove.6B.300d'],
                             help='Pre-trained embeddings type.')
-
     embeddings.add_argument('--embedding-size', type=int, help='Dimensionality of word embeddings.')
 
     # encoder hyperparameters
-    parser.add_argument('--encoder-hidden-size', type=int, default=128, help='Encoder RNN hidden size.')
-    parser.add_argument('--encoder-num-layers', type=int, default=1, help='Encoder RNN number of layers.')
-    parser.add_argument('--encoder-bidirectional', action='store_true', help='Use bidirectional encoder.')
+    encoder_args = parser.add_argument_group('Encoder', 'Encoder hyperparameters.')
+    encoder_args.add_argument('--encoder-hidden-size', type=int, default=128, help='Encoder RNN hidden size.')
+    encoder_args.add_argument('--encoder-num-layers', type=int, default=1, help='Encoder RNN number of layers.')
+    encoder_args.add_argument('--encoder-rnn-dropout', type=float, default=0.2, help='Encoder RNN dropout probability.')
+    encoder_args.add_argument('--encoder-bidirectional', action='store_true', help='Use bidirectional encoder.')
 
     # decoder hyperparameters
-    parser.add_argument('--decoder-hidden-size', type=int, default=128, help='Decoder RNN hidden size.')
-    parser.add_argument('--decoder-num-layers', type=int, default=1, help='Decoder RNN number of layers.')
+    decoder_args = parser.add_argument_group('Decoder', 'Decoder hyperparameters.')
+    decoder_args.add_argument('--decoder-type', choices=['bahdanau', 'luong'], default='bahdanau',
+                              help='Type of the decoder.')
+    decoder_args.add_argument('--decoder-hidden-size', type=int, default=128, help='Decoder RNN hidden size.')
+    decoder_args.add_argument('--decoder-num-layers', type=int, default=1, help='Decoder RNN number of layers.')
+    decoder_args.add_argument('--decoder-rnn-dropout', type=float, default=0.2, help='Decoder RNN dropout probability.')
+    decoder_args.add_argument('--luong-attn-hidden-size', type=int, default=128,
+                              help='Luong decoder attention hidden projection size')
+    decoder_args.add_argument('--luong-input-feed', action='store_true',
+                              help='Whether Luong decoder should use input feeding approach.')
+
+    # attention hyperparameters
+    attention_args = parser.add_argument_group('Attention', 'Attention hyperparameters.')
+    attention_args.add_argument('--attention-type', choices=['none', 'global', 'local-m', 'local-p'], default='none',
+                                help='Attention type.')
+    attention_args.add_argument('--attention-score', choices=['dot', 'general', 'concat'],
+                                help='Attention score function type.')
+    attention_args.add_argument('--half-window-size', type=int, default=5,
+                                help='D parameter from Luong et al. paper. Used only for local attention.')
+    attention_args.add_argument('--local-p-hidden-size', type=int, default=128,
+                                help='Local-p attention hidden size (used when predicting window position).')
+    attention_args.add_argument('--concat-attention-hidden-size', type=int, default=128,
+                                help='Attention layer hidden size. Used only with concat score function.')
 
     args = parser.parse_args()
 
@@ -126,6 +149,7 @@ def main():
 
     print("Using %s for training" % ('GPU' if cuda else 'CPU'))
     print('Loading dataset...', end='', flush=True)
+    # TODO make dataset script argument
     field, train_iter, val_iter, test_iter = dataset_factory('twitter-customer-support', args, device)
     print('Done.')
 
