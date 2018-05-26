@@ -118,12 +118,14 @@ def evaluate(model, val_iter, vocab_size, padding_idx):
 def train(model, optimizer, train_iter, vocab_size, grad_clip, padding_idx):
     model.train()  # put models in train mode (this is important because of dropout)
 
-    optimizer.zero_grad()
     total_loss = 0
     for batch in train_iter:
         # calculate models predictions
         question, answer = batch.question, batch.answer
         logits = model(question, answer)
+
+        # zero gradients
+        optimizer.zero_grad()
 
         # calculate loss and backpropagate errors
         loss = F.cross_entropy(logits.view(-1, vocab_size), answer[1:].view(-1),
