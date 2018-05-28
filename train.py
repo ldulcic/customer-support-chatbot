@@ -27,6 +27,7 @@ def parse_args():
                         help='Folder where models (and other configs) will be saved during training.')
     parser.add_argument('--save-every-epoch', action='store_true',
                         help='Save model every epoch regardless of validation loss.')
+    parser.add_argument('--dataset', choices=['twitter-apple', 'twitter-small'], help='Dataset for training model.')
 
     # cuda
     gpu_args = parser.add_argument_group('GPU', 'GPU related settings.')
@@ -70,7 +71,7 @@ def parse_args():
 
     # attention hyperparameters
     attention_args = parser.add_argument_group('Attention', 'Attention hyperparameters.')
-    attention_args.add_argument('--attention-type', choices=['none', 'global', 'local-m', 'local-p'], default='none',
+    attention_args.add_argument('--attention-type', choices=['none', 'global', 'local-m', 'local-p'], default='global',
                                 help='Attention type.')
     attention_args.add_argument('--attention-score', choices=['dot', 'general', 'concat'], default='dot',
                                 help='Attention score function type.')
@@ -102,15 +103,16 @@ def evaluate(model, val_iter, vocab_size, padding_idx):
     model.eval()  # put models in eval mode (this is important because of dropout)
 
     total_loss = 0
-    for batch in val_iter:
-        # calculate models predictions
-        question, answer = batch.question, batch.answer
-        logits = model(question, answer)
+    with torch.no_grad():
+        for batch in val_iter:
+            # calculate models predictions
+            question, answer = batch.question, batch.answer
+            logits = model(question, answer)
 
-        # calculate batch loss
-        loss = F.cross_entropy(logits.view(-1, vocab_size), answer[1:].view(-1),
-                               ignore_index=padding_idx)  # answer[1:] skip <sos> token
-        total_loss += loss.item()
+            # calculate batch loss
+            loss = F.cross_entropy(logits.view(-1, vocab_size), answer[1:].view(-1),
+                                   ignore_index=padding_idx)  # answer[1:] skip <sos> token
+            total_loss += loss.item()
 
     return total_loss / len(val_iter)
 
@@ -151,8 +153,7 @@ def main():
 
     print("Using %s for training" % ('GPU' if cuda else 'CPU'))
     print('Loading dataset...', end='', flush=True)
-    # TODO make dataset script argument
-    field, train_iter, val_iter, test_iter = dataset_factory('twitter-customer-support', args, device)
+    field, train_iter, val_iter, test_iter = dataset_factory(args, device)
     print('Done.')
 
     print('Saving field and args...', end='')
@@ -168,7 +169,7 @@ def main():
         model = nn.DataParallel(model, dim=1)  # if we were using batch_first we'd have to use dim=0
     print(model)  # print models summary
 
-    optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
+    optimizer = optim.Adam(model.parameters(), lr=args.learning_rate, amsgrad=True)
 
     try:
         best_val_loss = None
