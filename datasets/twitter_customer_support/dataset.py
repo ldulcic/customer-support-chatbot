@@ -22,7 +22,8 @@ def split_dataset(path, random_state=287):
 
 
 def load_dataset(args, device):
-    split_dataset('data/twitter_customer_support/applesupport.tsv')
+    #split_dataset('data/twitter_customer_support/applesupport.tsv')
+    base_name = 'twitter_customer_support-small' if args.dataset == 'twitter-small' else 'applesupport'
 
     field = data.Field(init_token=SOS_TOKEN, eos_token=EOS_TOKEN, pad_token=PAD_TOKEN,
                        tokenize='spacy', lower=True,
@@ -32,9 +33,9 @@ def load_dataset(args, device):
     train, val, test = data.TabularDataset.splits(
         path='data/twitter_customer_support',
         format='tsv',
-        train='applesupport-train.tsv',
-        validation='applesupport-val.tsv',
-        test='applesupport-test.tsv',
+        train=base_name + '-train.tsv',
+        validation=base_name + '-val.tsv',
+        test=base_name + '-test.tsv',
         fields=[
             ('question', field),
             ('answer', field)
