@@ -11,7 +11,7 @@ Following attentions are implemented: global, local-m, local-p.
 Following attention score functions are implemented: dot, general and concat.
 
 These concepts were introduced in following papers:
-**Neural Machine Translation by Jointly Learning to Align and Translate (Bahdanau et al., 2014)**
+**Neural Machine Translation by Jointly Learning to Align and Translate (Bahdanau et al., 2015)**
 **Effective Approaches to Attention-based Neural Machine Translation (Luong et al., 2015)** 
 """
 
@@ -24,9 +24,13 @@ attention_map = {
 
 score_map = {
     'dot': lambda args: DotAttention(),
-    'general': lambda args: GeneralAttention(args.encoder_hidden_size, args.decoder_hidden_size),
-    'concat': lambda args: ConcatAttention(args.concat_attention_hidden_size, args.encoder_hidden_size,
-                                           args.decoder_hidden_size)
+    'general': lambda args: GeneralAttention(encoder_hidden_size=args.encoder_hidden_size *
+                                                                 (2 if args.encoder_bidirectional else 1),
+                                             decoder_hidden_size=args.decoder_hidden_size),
+    'concat': lambda args: ConcatAttention(hidden_size=args.concat_attention_hidden_size,
+                                           encoder_hidden_size=args.encoder_hidden_size *
+                                                               (2 if args.encoder_bidirectional else 1),
+                                           decoder_hidden_size=args.decoder_hidden_size)
 }
 
 

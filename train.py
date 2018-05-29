@@ -68,6 +68,8 @@ def parse_args():
                               help='Luong decoder attention hidden projection size')
     decoder_args.add_argument('--luong-input-feed', action='store_true',
                               help='Whether Luong decoder should use input feeding approach.')
+    decoder_args.add_argument('--decoder-init-type', choices=['zeros', 'bahdanau', 'adjust_pad', 'adjust_all'],
+                              default='zeros', help='Decoder initial RNN hidden state initialization.')
 
     # attention hyperparameters
     attention_args = parser.add_argument_group('Attention', 'Attention hyperparameters.')
