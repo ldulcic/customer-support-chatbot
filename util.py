@@ -1,3 +1,6 @@
+import torch.nn as nn
+
+
 def embedding_size_from_name(name):
     return int(name.strip().split('.')[-1][:-1])
 
@@ -6,15 +9,24 @@ def print_dim(name, tensor):
     print("%s -> %s" % (name, tensor.size()))
 
 
-# convert twitter customer support dataset from 1-line Q 1-line A to tsv (Q <tab> A)
-def txt2tsv(txt_path, tsv_path):
-    with open(txt_path, encoding='utf-8') as txt:
-        lines = txt.readlines()
-    qa_pair_lines = ["%s\t%s\n" % (lines[i].rstrip(), lines[i + 1].rstrip()) for i in range(0, len(lines), 2)]
-    with open(tsv_path, 'w', encoding='utf-8') as tsv:
-        tsv.writelines(qa_pair_lines)
+class RNNWrapper(nn.Module):
+    """
+    Wrapper around GRU or LSTM RNN. If underlying RNN is GRU, this wrapper does nothing, it just forwards inputs and
+    outputs. If underlying RNN is LSTM this wrapper ignores LSTM cell state (s) and returns just hidden state (h).
+    This wrapper allows us to unify interface for GRU and LSTM so we don't have to treat them differently.
+    """
 
+    LSTM = 'LSTM'
+    GRU = 'GRU'
 
-if __name__ == '__main__':
-    txt2tsv('data/twitter_customer_support/twitter_customer_support.txt',
-            'data/twitter_customer_support/twitter_customer_support.tsv')
+    def __init__(self, rnn):
+        super(RNNWrapper, self).__init__()
+        assert isinstance(rnn, nn.LSTM) or isinstance(rnn, nn.GRU)
+        self.rnn_type = self.LSTM if isinstance(rnn, nn.LSTM) else self.GRU
+        self.rnn = rnn
+
+    def forward(self, *input):
+        rnn_out, hidden = self.rnn(*input)
+        if self.rnn_type == self.LSTM:
+            hidden, s = hidden  # ignore LSTM cell state s
+        return rnn_out, hidden
