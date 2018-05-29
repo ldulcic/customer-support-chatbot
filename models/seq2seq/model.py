@@ -6,8 +6,7 @@ import random
 class Seq2Seq(nn.Module):
     def __init__(self, encoder, decoder, vocab_size):
         """
-        Encapsulates Seq2Seq models. Currently doesn't support encoder and decoder with different number of layers.
-        TODO support encoder and decoder with different number of layers.
+        Encapsulates Seq2Seq models.
 
         :param encoder: Encoder.
         :param decoder: Decoder.
@@ -32,10 +31,11 @@ class Seq2Seq(nn.Module):
 
         encoder_outputs, h_n = self.encoder(src)
 
-        hidden = h_n[:self.decoder.num_layers]  # output of all encoder layers for t=seq_len
+        kwargs = {}
         input_word = trg[0]  # sos for whole batch
         for t in range(trg_seq_len):
-            output, hidden, attn_weights = self.decoder(t, input_word, hidden, encoder_outputs)
+            output, attn_weights, kwargs = self.decoder(t, input_word, encoder_outputs, h_n, **kwargs)
+
             outputs[t] = output
 
             teacher_forcing = random.random() < teacher_forcing_ratio
@@ -51,11 +51,11 @@ class Seq2Seq(nn.Module):
         encoder_outputs, h_n = self.encoder(src)
 
         input_word = torch.tensor([sos_idx])
-        hidden = h_n
 
+        kwargs = {}
         out = []
-        while len(out) < 20:
-            output, hidden = self.decoder(input_word, hidden)
+        for t in range(20):
+            output, attn_weights, kwargs = self.decoder(t, input_word, encoder_outputs, h_n, **kwargs)
             _, argmax = output.squeeze(0).data.max(dim=0)
             out.append(argmax.item())
             if out[-1] == eos_idx:

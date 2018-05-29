@@ -3,31 +3,35 @@ import torch.nn as nn
 import torch.nn.functional as F
 from abc import ABC, abstractmethod
 from .attention import attention_factory
+from .decoder_init import decoder_init_factory
 
 
-def bahdanau_decoder_factory(args, attn, vocab_size, padding_idx):
+def bahdanau_decoder_factory(args, attn, init, vocab_size, padding_idx):
     return BahdanauDecoder(
         attn=attn,
+        init_hidden=init,
         vocab_size=vocab_size,
         embed_size=args.embedding_size,
         rnn_hidden_size=args.decoder_hidden_size,
-        encoder_hidden_size=args.decoder_hidden_size,
+        encoder_hidden_size=args.encoder_hidden_size * (2 if args.encoder_bidirectional else 1),
         padding_idx=padding_idx,
         num_layers=args.decoder_num_layers,
         dropout=args.decoder_rnn_dropout
     )
 
 
-def luong_decoder_factory(args, attn, vocab_size, padding_idx):
+def luong_decoder_factory(args, attn, init, vocab_size, padding_idx):
     return LuongDecoder(
         attn=attn,
+        init_hidden=init,
         vocab_size=vocab_size,
         embed_size=args.embedding_size,
         rnn_hidden_size=args.decoder_hidden_size,
         attn_hidden_projection_size=args.luong_attn_hidden_size,
-        encoder_hidden_size=args.decoder_hidden_size,
+        encoder_hidden_size=args.encoder_hidden_size * (2 if args.encoder_bidirectional else 1),
         padding_idx=padding_idx,
         num_layers=args.decoder_num_layers,
+        dropout=args.decoder_rnn_dropout,
         input_feed=args.luong_input_feed
     )
 
@@ -39,53 +43,153 @@ decoder_map = {
 
 
 def decoder_factory(args, vocab_size, padding_idx):
+    """
+    Returns instance of ``Decoder`` based on provided args.
+    """
     # TODO what if attention type is 'none' ?
     attn = attention_factory(args)
-    return decoder_map[args.decoder_type](args, attn, vocab_size, padding_idx)
+    init = decoder_init_factory(args)
+    return decoder_map[args.decoder_type](args, attn, init, vocab_size, padding_idx)
 
 
 class Decoder(ABC, nn.Module):
     """
-    Defines decoder for seq2seq models.
+    Defines decoder for seq2seq models. Decoder is designed to be iteratively called until caller decides to stop.
+    In every step decoder depends on output in previous timestamps and encoder outputs.
 
-    Inputs: input, last_hidden, encoder_outputs
+    Decoder is designed to be stateless, to achieve that decoder doesn't save any data which will be required to
+    calculate output in the next timestamp, but instead, it returns that data to caller and is expecting that caller
+    forwards that same data in next timestamp (if caller wants to run another timestamp). That's why decoder accepts
+    and return `kwargs` in every timestamp. Caller should not alter or touch `kwargs` in any way, `kwargs` should
+    just be taken as return value and forwarded in the next timestamp. If caller alters `kwargs` decoder behaviour is
+    undefined and will most probably malfunction in that case. It is very important that caller handles decoder in
+    previously explained steps. When calling decoder for the first time (t=0) just forward empty dictionary as `kwargs`.
+
+   Following code shows how to use instance of decoder::
+
+        >>> kwargs = {}
+        >>> for t in range(num_timestamps):
+        >>>    output, attn_weights, kwargs = decoder(t, input_word, encoder_outputs, h_n, **kwargs)
+        >>>    # your code (remember - don't touch kwargs)
+
+    Inputs: t, input, encoder_outputs, h_n, kwargs
         - **t** (scalar): Current timestamp in decoder (0-based).
         - **input** (batch): Input word.
-        - **last_hidden** (num_layers, batch, hidden_size): Last RNN hidden state, in first step
-        this will be last hidden state of encoder and in subsequent steps it will be decoder hidden state from
-        previous step.
         - **encoder_outputs** (seq_len, batch, encoder_hidden_size): Last encoder layer outputs for every timestamp.
+        - **h_n** (num_layers * num_directions, batch, hidden_size): RNN outputs for all layers for t=seq_len (last
+                    timestamp)
+        - **kwargs** Dictionary of additional args used by decoder.
 
-    Outputs: output, hidden
+    Outputs: output, attn_weights, kwargs
         - **output** (batch, vocab_size): (Raw unscaled logits) Predictions for next word in output sequence.
-        - **hidden** (num_layers, batch, hidden_size): New RNN hidden state.
         - **attn_weights** (batch, seq_len): (Optional) Attention weights. This value is returned only if decoder uses
         attention.
+        - **kwargs** Dictionary of additional args used by decoder.
     """
 
+    def __init__(self, *args):
+        super(Decoder, self).__init__()
+        self._args = []
+        self._args_init = {}
+
+    def forward(self, t, input, encoder_outputs, h_n, **kwargs):
+        """
+        This method is decorator around ``_forward`` which handles additional args (kwargs).
+
+        This method will, based on subclass configured ``args``, unpack ``kwargs`` and forward it to subclass
+        implemented ``_forward`` method. It will also unpack ``_forward`` additional args and pack them in ``kwargs``
+        to return them to caller. It is very important that subclass implementation of ``_forward`` returns additional
+        args in the SAME ORDER as it receives them. ``_forward`` will receive additional args in the order it puts them
+        in ``args`` list.
+
+        Additionally, this method will in first timestamp (t=0) init additional args with subclass provided methods
+        in ``args_init``. (This also means that any data provided in kwargs when t=0 will be ignored, kwargs should be
+        empty dictionary when t=0)
+        """
+        assert (t == 0 and not kwargs) or (t > 0 and kwargs)
+
+        extra_args = []
+        for arg in self.args:
+            if t > 0 and arg not in kwargs:
+                raise AttributeError("Mandatory arg \"%s\" not present among method arguments" % arg)
+            extra_args.append(self.args_init[arg](encoder_outputs, h_n) if t == 0 else kwargs[arg])
+
+        output, attn_weights, *out = self._forward(t, input, encoder_outputs, *extra_args)
+        return output, attn_weights, {k: v for k, v in zip(self.args, out)}
+
     @abstractmethod
-    def forward(self, t, input, last_hidden, encoder_outputs):
-        pass
+    def _forward(self, *args):
+        """
+        Implements decoder forward pass. Subclasses should list args that want to receive in this method. Mandatory
+        ones are ``t, input, encoder_outputs, h_n`` plus any number of additional ones. Additional arguments will be
+        forwarded to this method in the SAME ORDER they are listed in ``args`` property. Also additional args should be
+        returned in the SAME ORDER as received.
+
+        Example of how should ``_forward`` be implemented (pay attention to ordering of additional args)::
+
+            >>> args = ['arg1', 'arg2']
+            >>> def _forward(t, input, encoder_outputs, h_n, arg1, arg2):
+            >>>     ...
+            >>>     arg1_new = some_calculation1()
+            >>>     arg2_new = some_calculation2()
+            >>>     ...
+            >>>     return output, attn_weights, arg1_new, arg2_new
+        """
+        raise NotImplementedError
 
     @property
     @abstractmethod
     def hidden_size(self):
-        pass
+        raise AttributeError
 
     @property
     @abstractmethod
     def num_layers(self):
-        pass
+        raise AttributeError
+
+    @property
+    @abstractmethod
+    def has_attention(self):
+        raise AttributeError
+
+    @property
+    def args(self):
+        """
+        List of additional arguments concrete subclass wants to receive.
+        """
+        return self._args
+
+    @args.setter
+    def args(self, value):
+        self._args = value
+
+    @property
+    def args_init(self):
+        """
+        Dictionary which provides for every additional argument provides function which returns initial value for that
+        parameter. Dictionary keys are additional args names, ``args_init`` must contain entry for every arg from
+        ``args``. This dictionary is used in the first timestamp (t=0) to provide initial values for additional args (
+        see ``forward``). Init functions will receive ``encoder_outputs, h_n`` as input.
+        """
+        return self._args_init
+
+    @args_init.setter
+    def args_init(self, value):
+        self._args_init = value
 
 
 class BahdanauDecoder(Decoder):
     """
-    Bahdanau decoder for seq2seq models. This decoder is called Bahdanau because it works like decoder from (Bahdanau et
-    al., 2014.) paper TODO give more details.
+    Bahdanau decoder for seq2seq models. This decoder is called Bahdanau because it's implemented similar to decoder
+    from (Bahdanau et al., 2015.) paper (see paper for details of inner workings of model). Decoder doesn't need to work
+    exactly like Bahdanau paper decoder because a lot of things can be configured, like decoder RNN initialization,
+    attention type and RNN cell type.
 
-    TODO implement calculating initial hidden state as in paper.
+    If you want this decoder to work exactly like Bahdanau, use ``global attention`` with ``concat`` score function,
+    use `bahdanau` decoder init function, use ``GRU`` RNN cell and make your encoder bi-directional.
 
     :param attn: Attention layer.
+    :param init_hidden: Function for generating initial RNN hidden state.
     :param vocab_size: Size of vocabulary over which we operate.
     :param embed_size: Dimensionality of word embeddings.
     :param rnn_hidden_size: Dimensionality of RNN hidden representation.
@@ -93,24 +197,32 @@ class BahdanauDecoder(Decoder):
                                 context)
     :param padding_idx: Index of pad token in vocabulary.
     :param num_layers: Number of layers in RNN. Default: 1.
+    :param dropout: RNN dropout layers mask probability. Default: 0.2.
 
-    Inputs: input, last_hidden, encoder_outputs
+    Inputs: t, input, encoder_outputs, h_n, last_hidden
+        - **t** (scalar): Current timestamp in decoder (0-based).
         - **input** (batch): Input word.
-        - **last_hidden** (num_layers, batch, hidden_size): Last RNN hidden state, in first step
-        this will be last hidden state of encoder and in subsequent steps it will be decoder hidden state from
-        previous step.
         - **encoder_outputs** (seq_len, batch, encoder_hidden_size): Last encoder layer outputs for every timestamp.
+        - **h_n** (num_layers * num_directions, batch, hidden_size): RNN outputs for all layers for t=seq_len (last
+                    timestamp)
+        - **last_hidden** (num_layers, batch, hidden_size): (Additional arg) RNN hidden state from previous timestamp.
 
-    Outputs: output, hidden
+    Outputs: output, attn_weights, hidden
         - **output** (batch, vocab_size): (Raw unscaled logits) Predictions for next word in output sequence.
-        - **hidden** (num_layers, batch, hidden_size): New RNN hidden state.
         - **attn_weights** (batch, seq_len): (Optional) Attention weights. This value is returned only if decoder uses
         attention.
+        - **hidden** (num_layers, batch, hidden_size): (Additional arg) New RNN hidden state.
     """
 
-    def __init__(self, attn, vocab_size, embed_size, rnn_hidden_size, encoder_hidden_size, padding_idx, num_layers=1,
-                 dropout=0.2):
+    args = ['last_hidden']
+
+    def __init__(self, attn, init_hidden, vocab_size, embed_size, rnn_hidden_size, encoder_hidden_size,
+                 padding_idx, num_layers=1, dropout=0.2):
         super(BahdanauDecoder, self).__init__()
+
+        self.args_init = {
+            'last_hidden': lambda encoder_outputs, h_n: self.initial_hidden(h_n)
+        }
 
         if rnn_hidden_size % 2 != 0:
             raise ValueError('RNN hidden size must be divisible by 2 because of maxout layer.')
@@ -118,9 +230,12 @@ class BahdanauDecoder(Decoder):
         self._hidden_size = rnn_hidden_size
         self._num_layers = num_layers
 
+        self.initial_hidden = init_hidden
         self.embed = nn.Embedding(num_embeddings=vocab_size, embedding_dim=embed_size, padding_idx=padding_idx)
-        self.rnn = nn.GRU(input_size=embed_size + encoder_hidden_size, hidden_size=rnn_hidden_size,
-                          num_layers=num_layers, dropout=dropout)
+        self.rnn = nn.GRU(input_size=embed_size + encoder_hidden_size,
+                          hidden_size=rnn_hidden_size,
+                          num_layers=num_layers,
+                          dropout=dropout)
         self.attn = attn
         self.out = nn.Linear(in_features=rnn_hidden_size // 2, out_features=vocab_size)
 
@@ -132,7 +247,11 @@ class BahdanauDecoder(Decoder):
     def num_layers(self):
         return self._num_layers
 
-    def forward(self, t, input, last_hidden, encoder_outputs):
+    @property
+    def has_attention(self):
+        return True
+
+    def _forward(self, t, input, encoder_outputs, last_hidden):
         embedded = self.embed(input)
 
         # prepare rnn input
@@ -152,15 +271,17 @@ class BahdanauDecoder(Decoder):
         # calculate logits
         output = self.out(maxout)
 
-        return output, hidden, attn_weights
+        return output, attn_weights, hidden
 
 
 class LuongDecoder(Decoder):
     """
-    Luong decoder for seq2seq models. This decoder is called Luong because it works like decoder from (Luong et
-    al., 2015.) paper TODO give more details.
+    Luong decoder for seq2seq models. This decoder is called Luong because it's implemented like decoder
+    from (Luong et al., 2015.) paper (see paper for details of inner workings of model). This decoder implementation
+    supports all variations of Luong decoder, plus you can try out this decoder with GRU RNN cell (Luong used only LSTM)
 
     :param attn: Attention layer.
+    :param init_hidden: Function for generating initial RNN hidden state.
     :param vocab_size: Size of vocabulary over which we operate.
     :param embed_size: Dimensionality of word embeddings.
     :param rnn_hidden_size: Dimensionality of RNN hidden representation.
@@ -170,33 +291,50 @@ class LuongDecoder(Decoder):
                                 context)
     :param padding_idx: Index of pad token in vocabulary.
     :param num_layers: Number of layers in RNN. Default: 1.
+    :param dropout: RNN dropout layers mask probability. Default: 0.2.
     :param input_feed: If True input feeding approach will be used. Input feeding approach feeds previous attentional
     hidden state to RNN in current timestamp (so decoder can be aware of previous alignment decisions). Default: False.
 
-    Inputs: input, last_hidden, encoder_outputs
+    Inputs: t, input, encoder_outputs, h_n, last_hidden, last_attn_hidden
+        - **t** (scalar): Current timestamp in decoder (0-based).
         - **input** (batch): Input word.
-        - **last_hidden** (num_layers, batch, hidden_size): Last RNN hidden state, in first step
-        this will be last hidden state of encoder and in subsequent steps it will be decoder hidden state from
-        previous step.
         - **encoder_outputs** (seq_len, batch, encoder_hidden_size): Last encoder layer outputs for every timestamp.
+        - **h_n** (num_layers * num_directions, batch, hidden_size): RNN outputs for all layers for t=seq_len (last
+                    timestamp)
+        - **last_hidden** (num_layers, batch, hidden_size): (Additional arg) RNN hidden state from previous timestamp.
+        - **last_attn_hidden** (batch, attn_hidden): (Additional arg) Attention hidden state from previous timestamp.
 
     Outputs: output, hidden
         - **output** (batch, vocab_size): (Raw unscaled logits) Predictions for next word in output sequence.
-        - **hidden** (num_layers, batch, hidden_size): New RNN hidden state.
         - **attn_weights** (batch, seq_len): (Optional) Attention weights. This value is returned only if decoder uses
         attention.
+        - **hidden** (num_layers, batch, hidden_size): (Additional arg) New RNN hidden state.
+        - **attn_hidden** (batch, attn_hidden): (Additional arg) New attention hidden state.
     """
 
-    def __init__(self, attn, vocab_size, embed_size, rnn_hidden_size, attn_hidden_projection_size, encoder_hidden_size,
-                 padding_idx, num_layers=1, dropout=0.2, input_feed=False):
+    LAST_HIDDEN = 'last_hidden'
+    LAST_ATTN_HIDDEN = 'last_attn_hidden'
+
+    args = [LAST_HIDDEN]
+
+    def __init__(self, attn, init_hidden, vocab_size, embed_size, rnn_hidden_size, attn_hidden_projection_size,
+                 encoder_hidden_size, padding_idx, num_layers=1, dropout=0.2, input_feed=False):
         super(LuongDecoder, self).__init__()
+
+        if input_feed:
+            self.args += [self.LAST_ATTN_HIDDEN]
+
+        self.args_init = {
+            self.LAST_HIDDEN: lambda encoder_outputs, h_n: self.initial_hidden(h_n),
+            self.LAST_ATTN_HIDDEN: lambda encoder_outputs, h_n: self.last_attn_hidden_init(h_n.size(1))  # h_n.size(1) == batch_size
+        }
 
         self._hidden_size = rnn_hidden_size
         self._num_layers = num_layers
+        self.initial_hidden = init_hidden
 
         self.input_feed = input_feed
         self.attn_hidden_projection_size = attn_hidden_projection_size
-        self.previous_attn_hidden = None
 
         rnn_input_size = embed_size + (attn_hidden_projection_size if input_feed else 0)
         self.embed = nn.Embedding(num_embeddings=vocab_size, embedding_dim=embed_size, padding_idx=padding_idx)
@@ -217,18 +355,22 @@ class LuongDecoder(Decoder):
     def num_layers(self):
         return self._num_layers
 
-    def forward(self, t, input, last_hidden, encoder_outputs):
+    @property
+    def has_attention(self):
+        return True
+
+    def last_attn_hidden_init(self, batch_size):
+        return torch.zeros(batch_size, self.attn_hidden_projection_size) if self.input_feed else None
+
+    def _forward(self, t, input, encoder_outputs, last_hidden, last_attn_hidden=None):
+        assert (self.input_feed and last_attn_hidden is not None) or (not self.input_feed and last_attn_hidden is None)
+
         embedded = self.embed(input)
 
         # prepare rnn input
         rnn_input = embedded
         if self.input_feed:
-            if self.previous_attn_hidden is None:
-                assert t == 0
-                # init previous_attn_hidden to zeros in first timestamp
-                batch_size = embedded.size(0)
-                self.previous_attn_hidden = torch.zeros(batch_size, self.attn_hidden_projection_size)
-            rnn_input = torch.cat([rnn_input, self.previous_attn_hidden], dim=1)
+            rnn_input = torch.cat([rnn_input, last_attn_hidden], dim=1)
         rnn_input = rnn_input.unsqueeze(0)  # (batch, rnn_input_size) -> (1, batch, rnn_input_size)
 
         # rnn output
@@ -236,13 +378,9 @@ class LuongDecoder(Decoder):
 
         # attention context
         attn_weights, context = self.attn(t, hidden[-1], encoder_outputs)
-        attn_hidden = F.tanh(self.attn_hidden_lin(torch.cat([context, hidden[-1]], dim=1)))
-
-        # save attn_hidden if using input feeding approach
-        if self.input_feed:
-            self.previous_attn_hidden = attn_hidden
+        attn_hidden = F.tanh(self.attn_hidden_lin(torch.cat([context, hidden[-1]], dim=1)))  # (batch, attn_hidden)
 
         # calculate logits
         output = self.out(attn_hidden)
 
-        return output, hidden, attn_weights
+        return output, attn_weights, hidden, attn_hidden
