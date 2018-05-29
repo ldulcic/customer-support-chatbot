@@ -9,7 +9,8 @@ def encoder_factory(args, vocab_size, padding_idx):
         hidden_size=args.encoder_hidden_size,
         padding_idx=padding_idx,
         num_layers=args.encoder_num_layers,
-        dropout=args.encoder_rnn_dropout
+        dropout=args.encoder_rnn_dropout,
+        bidirectional=args.encoder_bidirectional
     )
 
 
