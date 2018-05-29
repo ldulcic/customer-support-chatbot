@@ -1,9 +1,11 @@
 import torch.nn as nn
+from util import RNNWrapper
 from abc import ABC, abstractmethod
 
 
 def encoder_factory(args, vocab_size, padding_idx):
     return SimpleEncoder(
+        rnn_cls=getattr(nn, args.encoder_rnn_cell),  # gets LSTM or GRU constructor from nn module
         vocab_size=vocab_size,
         embed_size=args.embedding_size,
         hidden_size=args.encoder_hidden_size,
@@ -27,6 +29,7 @@ class Encoder(ABC, nn.Module):
         - **h_n** (num_layers * num_directions, batch, hidden_size): RNN outputs for all layers for t=seq_len (last
                     timestamp)
     """
+
     @abstractmethod
     def forward(self, input, h_0=None):
         pass
@@ -51,6 +54,7 @@ class SimpleEncoder(Encoder):
     """
     Encoder for seq2seq models.
 
+    :param rnn_cls: RNN callable constructor. RNN is either LSTM or GRU.
     :param vocab_size: Size of vocabulary over which we operate.
     :param embed_size: Dimensionality of word embeddings.
     :param hidden_size: Dimensionality of RNN hidden representation.
@@ -67,7 +71,8 @@ class SimpleEncoder(Encoder):
         - **h_n** (num_layers * num_directions, batch, hidden_size): RNN outputs for all layers for t=seq_len (last
                     timestamp)
     """
-    def __init__(self, vocab_size, embed_size, hidden_size, padding_idx, num_layers=1, dropout=0.2,
+
+    def __init__(self, rnn_cls, vocab_size, embed_size, hidden_size, padding_idx, num_layers=1, dropout=0.2,
                  bidirectional=False):
         super(SimpleEncoder, self).__init__()
 
@@ -76,11 +81,11 @@ class SimpleEncoder(Encoder):
         self._num_layers = num_layers
 
         self.embed = nn.Embedding(num_embeddings=vocab_size, embedding_dim=embed_size, padding_idx=padding_idx)
-        self.rnn = nn.GRU(input_size=embed_size,
-                          hidden_size=hidden_size,
-                          num_layers=num_layers,
-                          dropout=dropout,
-                          bidirectional=bidirectional)
+        self.rnn = RNNWrapper(rnn_cls(input_size=embed_size,
+                                      hidden_size=hidden_size,
+                                      num_layers=num_layers,
+                                      dropout=dropout,
+                                      bidirectional=bidirectional))
 
     @property
     def hidden_size(self):

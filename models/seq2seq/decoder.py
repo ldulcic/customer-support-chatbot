@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from util import RNNWrapper
 from abc import ABC, abstractmethod
 from .attention import attention_factory
 from .decoder_init import decoder_init_factory
@@ -8,6 +9,7 @@ from .decoder_init import decoder_init_factory
 
 def bahdanau_decoder_factory(args, attn, init, vocab_size, padding_idx):
     return BahdanauDecoder(
+        rnn_cls=getattr(nn, args.encoder_rnn_cell),  # gets LSTM or GRU constructor from nn module
         attn=attn,
         init_hidden=init,
         vocab_size=vocab_size,
@@ -22,6 +24,7 @@ def bahdanau_decoder_factory(args, attn, init, vocab_size, padding_idx):
 
 def luong_decoder_factory(args, attn, init, vocab_size, padding_idx):
     return LuongDecoder(
+        rnn_cls=getattr(nn, args.encoder_rnn_cell),  # gets LSTM or GRU constructor from nn module
         attn=attn,
         init_hidden=init,
         vocab_size=vocab_size,
@@ -188,6 +191,7 @@ class BahdanauDecoder(Decoder):
     If you want this decoder to work exactly like Bahdanau, use ``global attention`` with ``concat`` score function,
     use `bahdanau` decoder init function, use ``GRU`` RNN cell and make your encoder bi-directional.
 
+    :param rnn_cls: RNN callable constructor. RNN is either LSTM or GRU.
     :param attn: Attention layer.
     :param init_hidden: Function for generating initial RNN hidden state.
     :param vocab_size: Size of vocabulary over which we operate.
@@ -216,7 +220,7 @@ class BahdanauDecoder(Decoder):
 
     args = ['last_hidden']
 
-    def __init__(self, attn, init_hidden, vocab_size, embed_size, rnn_hidden_size, encoder_hidden_size,
+    def __init__(self, rnn_cls, attn, init_hidden, vocab_size, embed_size, rnn_hidden_size, encoder_hidden_size,
                  padding_idx, num_layers=1, dropout=0.2):
         super(BahdanauDecoder, self).__init__()
 
@@ -232,10 +236,10 @@ class BahdanauDecoder(Decoder):
 
         self.initial_hidden = init_hidden
         self.embed = nn.Embedding(num_embeddings=vocab_size, embedding_dim=embed_size, padding_idx=padding_idx)
-        self.rnn = nn.GRU(input_size=embed_size + encoder_hidden_size,
-                          hidden_size=rnn_hidden_size,
-                          num_layers=num_layers,
-                          dropout=dropout)
+        self.rnn = RNNWrapper(rnn_cls(input_size=embed_size + encoder_hidden_size,
+                                      hidden_size=rnn_hidden_size,
+                                      num_layers=num_layers,
+                                      dropout=dropout))
         self.attn = attn
         self.out = nn.Linear(in_features=rnn_hidden_size // 2, out_features=vocab_size)
 
@@ -280,6 +284,7 @@ class LuongDecoder(Decoder):
     from (Luong et al., 2015.) paper (see paper for details of inner workings of model). This decoder implementation
     supports all variations of Luong decoder, plus you can try out this decoder with GRU RNN cell (Luong used only LSTM)
 
+    :param rnn_cls: RNN callable constructor. RNN is either LSTM or GRU.
     :param attn: Attention layer.
     :param init_hidden: Function for generating initial RNN hidden state.
     :param vocab_size: Size of vocabulary over which we operate.
@@ -317,7 +322,7 @@ class LuongDecoder(Decoder):
 
     args = [LAST_HIDDEN]
 
-    def __init__(self, attn, init_hidden, vocab_size, embed_size, rnn_hidden_size, attn_hidden_projection_size,
+    def __init__(self, rnn_cls, attn, init_hidden, vocab_size, embed_size, rnn_hidden_size, attn_hidden_projection_size,
                  encoder_hidden_size, padding_idx, num_layers=1, dropout=0.2, input_feed=False):
         super(LuongDecoder, self).__init__()
 
@@ -338,10 +343,10 @@ class LuongDecoder(Decoder):
 
         rnn_input_size = embed_size + (attn_hidden_projection_size if input_feed else 0)
         self.embed = nn.Embedding(num_embeddings=vocab_size, embedding_dim=embed_size, padding_idx=padding_idx)
-        self.rnn = nn.GRU(input_size=rnn_input_size,
-                          hidden_size=rnn_hidden_size,
-                          num_layers=num_layers,
-                          dropout=dropout)
+        self.rnn = RNNWrapper(rnn_cls(input_size=rnn_input_size,
+                                      hidden_size=rnn_hidden_size,
+                                      num_layers=num_layers,
+                                      dropout=dropout))
         self.attn = attn
         self.attn_hidden_lin = nn.Linear(in_features=rnn_hidden_size + encoder_hidden_size,
                                          out_features=attn_hidden_projection_size)

@@ -52,6 +52,8 @@ def parse_args():
 
     # encoder hyperparameters
     encoder_args = parser.add_argument_group('Encoder', 'Encoder hyperparameters.')
+    encoder_args.add_argument('--encoder-rnn-cell', choices=['LSTM', 'GRU'], default='LSTM',
+                              help='Encoder RNN cell type.')
     encoder_args.add_argument('--encoder-hidden-size', type=int, default=128, help='Encoder RNN hidden size.')
     encoder_args.add_argument('--encoder-num-layers', type=int, default=1, help='Encoder RNN number of layers.')
     encoder_args.add_argument('--encoder-rnn-dropout', type=float, default=0.2, help='Encoder RNN dropout probability.')
@@ -61,6 +63,8 @@ def parse_args():
     decoder_args = parser.add_argument_group('Decoder', 'Decoder hyperparameters.')
     decoder_args.add_argument('--decoder-type', choices=['bahdanau', 'luong'], default='bahdanau',
                               help='Type of the decoder.')
+    decoder_args.add_argument('--decoder-rnn-cell', choices=['LSTM', 'GRU'], default='LSTM',
+                              help='Decoder RNN cell type.')
     decoder_args.add_argument('--decoder-hidden-size', type=int, default=128, help='Decoder RNN hidden size.')
     decoder_args.add_argument('--decoder-num-layers', type=int, default=1, help='Decoder RNN number of layers.')
     decoder_args.add_argument('--decoder-rnn-dropout', type=float, default=0.2, help='Decoder RNN dropout probability.')
