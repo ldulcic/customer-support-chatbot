@@ -46,7 +46,8 @@ class Seq2SeqTrain(nn.Module):
         for t in range(answer_seq_len - 1):
             output, attn_weights, kwargs = self.decoder(t, input_word, encoder_outputs, h_n, **kwargs)
 
-            outputs = output if outputs is None else torch.cat([outputs, output], dim=1)
+            out = output.unsqueeze(0)  # (batch_size, vocab_size) -> (1, batch_size, vocab_size)
+            outputs = out if outputs is None else torch.cat([outputs, out], dim=0)
 
             teacher_forcing = random.random() < self.teacher_forcing_ratio
             if teacher_forcing:
