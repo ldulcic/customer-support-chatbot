@@ -8,7 +8,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 from torch.nn.utils import clip_grad_norm_
 from dataset import dataset_factory
-from model import model_factory
+from model import train_model_factory
 from serialization import save_object, save_model
 from constants import PAD_TOKEN
 from datetime import datetime
@@ -28,6 +28,8 @@ def parse_args():
     parser.add_argument('--save-every-epoch', action='store_true',
                         help='Save model every epoch regardless of validation loss.')
     parser.add_argument('--dataset', choices=['twitter-apple', 'twitter-small'], help='Dataset for training model.')
+    parser.add_argument('--teacher-forcing-ratio', type=float, default=0.5,
+                        help='Teacher forcing ratio used in seq2seq models. [0-1]')
 
     # cuda
     gpu_args = parser.add_argument_group('GPU', 'GPU related settings.')
@@ -170,7 +172,7 @@ def main():
     vocab_size = len(field.vocab)
     padding_idx = field.vocab.stoi[PAD_TOKEN]
 
-    model = model_factory(args, field, vocab_size, padding_idx)
+    model = train_model_factory(args, field, vocab_size)
     if cuda and args.multi_gpu:
         model = nn.DataParallel(model, dim=1)  # if we were using batch_first we'd have to use dim=0
     print(model)  # print models summary
@@ -187,10 +189,10 @@ def main():
             print("[Epoch=%d/%d] train_loss %f - val_loss %f time=%s " %
                   (epoch + 1, args.max_epochs, train_loss, val_loss, datetime.now() - start), end='')
 
-            # save models if models achieved best val loss
+            # save models if models achieved best val loss (or save every epoch is selected)
             if args.save_every_epoch or not best_val_loss or val_loss < best_val_loss:
                 print('(Saving model...', end='')
-                save_model(args.save_path, model, epoch, train_loss, val_loss)
+                save_model(args.save_path, model, epoch + 1, train_loss, val_loss)
                 print('Done)', end='')
                 best_val_loss = val_loss
             print()

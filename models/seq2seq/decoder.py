@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from util import RNNWrapper
 from abc import ABC, abstractmethod
 from .attention import attention_factory
 from .decoder_init import decoder_init_factory
@@ -209,23 +208,28 @@ class BahdanauDecoder(Decoder):
         - **encoder_outputs** (seq_len, batch, encoder_hidden_size): Last encoder layer outputs for every timestamp.
         - **h_n** (num_layers * num_directions, batch, hidden_size): RNN outputs for all layers for t=seq_len (last
                     timestamp)
-        - **last_hidden** (num_layers, batch, hidden_size): (Additional arg) RNN hidden state from previous timestamp.
+        - **last_state** (num_layers, batch, hidden_size): (Additional arg) RNN state from previous timestamp. This
+        state is a hidden state (tensor) if rnn cell type is GRU, if rnn cell type is LSTM this is a tuple of last
+        hidden state and last cell state.
 
     Outputs: output, attn_weights, hidden
         - **output** (batch, vocab_size): (Raw unscaled logits) Predictions for next word in output sequence.
         - **attn_weights** (batch, seq_len): (Optional) Attention weights. This value is returned only if decoder uses
         attention.
-        - **hidden** (num_layers, batch, hidden_size): (Additional arg) New RNN hidden state.
+        - **hidden** (num_layers, batch, hidden_size): (Additional arg) New RNN state. (hidden state if rnn is GRU,
+        tuple of hidden and cell state if rnn is LSTM)
     """
 
-    args = ['last_hidden']
+    LAST_STATE = 'last_state'
+
+    args = [LAST_STATE]
 
     def __init__(self, rnn_cls, attn, init_hidden, vocab_size, embed_size, rnn_hidden_size, encoder_hidden_size,
                  padding_idx, num_layers=1, dropout=0.2):
         super(BahdanauDecoder, self).__init__()
 
         self.args_init = {
-            'last_hidden': lambda encoder_outputs, h_n: self.initial_hidden(h_n)
+            self.LAST_STATE: lambda encoder_outputs, h_n: self.initial_hidden(h_n)
         }
 
         if rnn_hidden_size % 2 != 0:
@@ -236,10 +240,10 @@ class BahdanauDecoder(Decoder):
 
         self.initial_hidden = init_hidden
         self.embed = nn.Embedding(num_embeddings=vocab_size, embedding_dim=embed_size, padding_idx=padding_idx)
-        self.rnn = RNNWrapper(rnn_cls(input_size=embed_size + encoder_hidden_size,
-                                      hidden_size=rnn_hidden_size,
-                                      num_layers=num_layers,
-                                      dropout=dropout))
+        self.rnn = rnn_cls(input_size=embed_size + encoder_hidden_size,
+                           hidden_size=rnn_hidden_size,
+                           num_layers=num_layers,
+                           dropout=dropout)
         self.attn = attn
         self.out = nn.Linear(in_features=rnn_hidden_size // 2, out_features=vocab_size)
 
@@ -255,8 +259,11 @@ class BahdanauDecoder(Decoder):
     def has_attention(self):
         return True
 
-    def _forward(self, t, input, encoder_outputs, last_hidden):
+    def _forward(self, t, input, encoder_outputs, last_state):
         embedded = self.embed(input)
+
+        # if RNN is LSTM state is tuple
+        last_hidden = last_state[0] if isinstance(last_state, tuple) else last_state
 
         # prepare rnn input
         attn_weights, context = self.attn(t, last_hidden[-1], encoder_outputs)
@@ -264,7 +271,10 @@ class BahdanauDecoder(Decoder):
         rnn_input = rnn_input.unsqueeze(0)  # (batch, embed + enc_h) -> (1, batch, embed + enc_h)
 
         # calculate rnn output
-        _, hidden = self.rnn(rnn_input, last_hidden)
+        _, state = self.rnn(rnn_input, last_state)
+
+        # if RNN is LSTM state is tuple
+        hidden = state[0] if isinstance(state, tuple) else state
 
         # maxout layer (with k=2)
         top_layer_hidden = hidden[-1]  # (batch, rnn_hidden)
@@ -275,7 +285,7 @@ class BahdanauDecoder(Decoder):
         # calculate logits
         output = self.out(maxout)
 
-        return output, attn_weights, hidden
+        return output, attn_weights, state
 
 
 class LuongDecoder(Decoder):
@@ -306,21 +316,24 @@ class LuongDecoder(Decoder):
         - **encoder_outputs** (seq_len, batch, encoder_hidden_size): Last encoder layer outputs for every timestamp.
         - **h_n** (num_layers * num_directions, batch, hidden_size): RNN outputs for all layers for t=seq_len (last
                     timestamp)
-        - **last_hidden** (num_layers, batch, hidden_size): (Additional arg) RNN hidden state from previous timestamp.
+        - **last_state** (num_layers, batch, hidden_size): (Additional arg) RNN state from previous timestamp. This
+        state is a hidden state (tensor) if rnn cell type is GRU, if rnn cell type is LSTM this is a tuple of last
+        hidden state and last cell state.
         - **last_attn_hidden** (batch, attn_hidden): (Additional arg) Attention hidden state from previous timestamp.
 
     Outputs: output, hidden
         - **output** (batch, vocab_size): (Raw unscaled logits) Predictions for next word in output sequence.
         - **attn_weights** (batch, seq_len): (Optional) Attention weights. This value is returned only if decoder uses
         attention.
-        - **hidden** (num_layers, batch, hidden_size): (Additional arg) New RNN hidden state.
+        - **hidden** (num_layers, batch, hidden_size): (Additional arg) New RNN state. (hidden state if rnn is GRU,
+        tuple of hidden and cell state if rnn is LSTM)
         - **attn_hidden** (batch, attn_hidden): (Additional arg) New attention hidden state.
     """
 
-    LAST_HIDDEN = 'last_hidden'
+    LAST_STATE = 'last_state'
     LAST_ATTN_HIDDEN = 'last_attn_hidden'
 
-    args = [LAST_HIDDEN]
+    args = [LAST_STATE]
 
     def __init__(self, rnn_cls, attn, init_hidden, vocab_size, embed_size, rnn_hidden_size, attn_hidden_projection_size,
                  encoder_hidden_size, padding_idx, num_layers=1, dropout=0.2, input_feed=False):
@@ -330,7 +343,7 @@ class LuongDecoder(Decoder):
             self.args += [self.LAST_ATTN_HIDDEN]
 
         self.args_init = {
-            self.LAST_HIDDEN: lambda encoder_outputs, h_n: self.initial_hidden(h_n),
+            self.LAST_STATE: lambda encoder_outputs, h_n: self.initial_hidden(h_n),
             self.LAST_ATTN_HIDDEN: lambda encoder_outputs, h_n: self.last_attn_hidden_init(h_n.size(1))  # h_n.size(1) == batch_size
         }
 
@@ -343,10 +356,10 @@ class LuongDecoder(Decoder):
 
         rnn_input_size = embed_size + (attn_hidden_projection_size if input_feed else 0)
         self.embed = nn.Embedding(num_embeddings=vocab_size, embedding_dim=embed_size, padding_idx=padding_idx)
-        self.rnn = RNNWrapper(rnn_cls(input_size=rnn_input_size,
-                                      hidden_size=rnn_hidden_size,
-                                      num_layers=num_layers,
-                                      dropout=dropout))
+        self.rnn = rnn_cls(input_size=rnn_input_size,
+                           hidden_size=rnn_hidden_size,
+                           num_layers=num_layers,
+                           dropout=dropout)
         self.attn = attn
         self.attn_hidden_lin = nn.Linear(in_features=rnn_hidden_size + encoder_hidden_size,
                                          out_features=attn_hidden_projection_size)
@@ -367,7 +380,7 @@ class LuongDecoder(Decoder):
     def last_attn_hidden_init(self, batch_size):
         return torch.zeros(batch_size, self.attn_hidden_projection_size) if self.input_feed else None
 
-    def _forward(self, t, input, encoder_outputs, last_hidden, last_attn_hidden=None):
+    def _forward(self, t, input, encoder_outputs, last_state, last_attn_hidden=None):
         assert (self.input_feed and last_attn_hidden is not None) or (not self.input_feed and last_attn_hidden is None)
 
         embedded = self.embed(input)
@@ -379,7 +392,10 @@ class LuongDecoder(Decoder):
         rnn_input = rnn_input.unsqueeze(0)  # (batch, rnn_input_size) -> (1, batch, rnn_input_size)
 
         # rnn output
-        _, hidden = self.rnn(rnn_input)
+        _, state = self.rnn(rnn_input, last_state)
+
+        # if RNN is LSTM state is tuple
+        hidden = state[0] if isinstance(state, tuple) else state
 
         # attention context
         attn_weights, context = self.attn(t, hidden[-1], encoder_outputs)
@@ -388,4 +404,4 @@ class LuongDecoder(Decoder):
         # calculate logits
         output = self.out(attn_hidden)
 
-        return output, attn_weights, hidden, attn_hidden
+        return output, attn_weights, state, attn_hidden

@@ -2,9 +2,8 @@
 
 import torch
 import argparse
-from model import model_factory
+from model import predict_model_factory
 from serialization import load_object
-from constants import SOS_TOKEN, EOS_TOKEN, PAD_TOKEN
 
 
 def parse_args():
@@ -37,8 +36,7 @@ def main():
 
     vocab_size = len(field.vocab)
 
-    model = model_factory(model_args, field, vocab_size, field.vocab.stoi[PAD_TOKEN])
-    model.load_state_dict(torch.load(args.model_path, map_location=lambda storage, loc: storage))
+    model = predict_model_factory(model_args, args.model_path, field, vocab_size)
     print('model loaded')
     model.eval()
 
@@ -51,10 +49,11 @@ def main():
             if question:
                 break
 
-        tensor = prepare_question(question, field, device)
-
-        token_idx = model.predict(tensor, field.vocab.stoi[SOS_TOKEN], field.vocab.stoi[EOS_TOKEN])
-        response = ' '.join(map(lambda idx: field.vocab.itos[idx], token_idx))
+        # tensor = prepare_question(question, field, device)
+        #
+        # token_idx = model.predict(tensor, field.vocab.stoi[SOS_TOKEN], field.vocab.stoi[EOS_TOKEN])
+        # response = ' '.join(map(lambda idx: field.vocab.itos[idx], token_idx))
+        response = model(question)
         print('Bot: ' + response)
 
 
