@@ -9,8 +9,7 @@ import torch.nn.functional as F
 from torch.nn.utils import clip_grad_norm_
 from dataset import dataset_factory
 from model import train_model_factory
-from serialization import save_object, save_model
-from constants import PAD_TOKEN
+from serialization import save_object, save_model, save_vocab
 from datetime import datetime
 from util import embedding_size_from_name
 
@@ -107,7 +106,7 @@ def parse_args():
     return args
 
 
-def evaluate(model, val_iter, vocab_size, padding_idx):
+def evaluate(model, val_iter, metadata):
     model.eval()  # put models in eval mode (this is important because of dropout)
 
     total_loss = 0
@@ -118,14 +117,14 @@ def evaluate(model, val_iter, vocab_size, padding_idx):
             logits = model(question, answer)
 
             # calculate batch loss
-            loss = F.cross_entropy(logits.view(-1, vocab_size), answer[1:].view(-1),
-                                   ignore_index=padding_idx)  # answer[1:] skip <sos> token
+            loss = F.cross_entropy(logits.view(-1, metadata.vocab_size), answer[1:].view(-1),
+                                   ignore_index=metadata.padding_idx)  # answer[1:] skip <sos> token
             total_loss += loss.item()
 
     return total_loss / len(val_iter)
 
 
-def train(model, optimizer, train_iter, vocab_size, grad_clip, padding_idx):
+def train(model, optimizer, train_iter, metadata, grad_clip):
     model.train()  # put models in train mode (this is important because of dropout)
 
     total_loss = 0
@@ -138,8 +137,8 @@ def train(model, optimizer, train_iter, vocab_size, grad_clip, padding_idx):
         optimizer.zero_grad()
 
         # calculate loss and backpropagate errors
-        loss = F.cross_entropy(logits.view(-1, vocab_size), answer[1:].view(-1),
-                               ignore_index=padding_idx)  # answer[1:] skip <sos> token
+        loss = F.cross_entropy(logits.view(-1, metadata.vocab_size), answer[1:].view(-1),
+                               ignore_index=metadata.padding_idx)  # answer[1:] skip <sos> token
         loss.backward()
 
         total_loss += loss.item()
@@ -161,18 +160,15 @@ def main():
 
     print("Using %s for training" % ('GPU' if cuda else 'CPU'))
     print('Loading dataset...', end='', flush=True)
-    field, train_iter, val_iter, test_iter = dataset_factory(args, device)
+    metadata, vocab, train_iter, val_iter, test_iter = dataset_factory(args, device)
     print('Done.')
 
-    print('Saving field and args...', end='')
-    save_object(field, args.save_path + os.path.sep + 'field.dill')
-    save_object(args, args.save_path + os.path.sep + 'args.dill')
+    print('Saving vocab and args...', end='')
+    save_vocab(vocab, args.save_path + os.path.sep + 'vocab')
+    save_object(args, args.save_path + os.path.sep + 'args')
     print('Done')
 
-    vocab_size = len(field.vocab)
-    padding_idx = field.vocab.stoi[PAD_TOKEN]
-
-    model = train_model_factory(args, field, vocab_size)
+    model = train_model_factory(args, metadata)
     if cuda and args.multi_gpu:
         model = nn.DataParallel(model, dim=1)  # if we were using batch_first we'd have to use dim=0
     print(model)  # print models summary
@@ -184,8 +180,8 @@ def main():
         for epoch in range(args.max_epochs):
             start = datetime.now()
             # calculate train and val loss
-            train_loss = train(model, optimizer, train_iter, vocab_size, args.gradient_clip, padding_idx)
-            val_loss = evaluate(model, val_iter, vocab_size, padding_idx)
+            train_loss = train(model, optimizer, train_iter, metadata, args.gradient_clip)
+            val_loss = evaluate(model, val_iter, metadata)
             print("[Epoch=%d/%d] train_loss %f - val_loss %f time=%s " %
                   (epoch + 1, args.max_epochs, train_loss, val_loss, datetime.now() - start), end='')
 
@@ -199,7 +195,7 @@ def main():
     except KeyboardInterrupt:
         print('[Ctrl-C] Training stopped.')
 
-    test_loss = evaluate(model, test_iter, vocab_size, padding_idx)
+    test_loss = evaluate(model, test_iter, metadata)
     print("Test loss %f" % test_loss)
 
 

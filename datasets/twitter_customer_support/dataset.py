@@ -4,6 +4,7 @@ import pandas as pd
 from torchtext import data
 from sklearn.model_selection import train_test_split
 from constants import SOS_TOKEN, EOS_TOKEN, PAD_TOKEN
+from util import Metadata
 
 
 def split_dataset(path, random_state=287):
@@ -21,13 +22,28 @@ def split_dataset(path, random_state=287):
     test.to_csv(dir_name + os.path.sep + file_name + '-test.tsv', sep='\t', index=False)
 
 
-def load_dataset(args, device):
-    #split_dataset('data/twitter_customer_support/applesupport.tsv')
-    base_name = 'twitter_customer_support-small' if args.dataset == 'twitter-small' else 'applesupport'
+def load_metadata(vocab):
+    """
+    Loads dataset info data.
+    """
+    return Metadata(vocab_size=len(vocab), padding_idx=vocab.stoi[PAD_TOKEN], vectors=vocab.vectors)
 
-    field = data.Field(init_token=SOS_TOKEN, eos_token=EOS_TOKEN, pad_token=PAD_TOKEN,
-                       tokenize='spacy', lower=True,
-                       tensor_type=torch.cuda.LongTensor if device.type == 'cuda' else torch.LongTensor)
+
+def load_field(device):
+    """
+    Loads field for twitter dataset.
+    """
+    return data.Field(init_token=SOS_TOKEN, eos_token=EOS_TOKEN, pad_token=PAD_TOKEN,
+                      tokenize='spacy', lower=True,
+                      tensor_type=torch.cuda.LongTensor if device.type == 'cuda' else torch.LongTensor)
+
+
+def load_dataset(args, device):
+    # split_dataset('data/twitter_customer_support/applesupport.tsv')
+    base_name = 'twitter_customer_support-small' if args.dataset == 'twitter-small' else 'applesupport'
+    #base_name = 'test'
+
+    field = load_field(device)
 
     # load dataset
     train, val, test = data.TabularDataset.splits(
@@ -44,14 +60,17 @@ def load_dataset(args, device):
     )
 
     # build vocabulary
-    field.build_vocab(train, vectors=args.embedding_type, min_freq=2)
+    field.build_vocab(train, vectors=args.embedding_type)
 
     # create iterators for dataset
     train_iter, val_iter, test_iter = data.BucketIterator.splits(
         (train, val, test), batch_size=args.batch_size, sort_key=lambda x: len(x.question),
         device=device, repeat=False)
 
-    return field, train_iter, val_iter, test_iter
+    vocab = field.vocab
+    metadata = load_metadata(vocab)
+
+    return metadata, field.vocab, train_iter, val_iter, test_iter
 
 
 if __name__ == '__main__':
