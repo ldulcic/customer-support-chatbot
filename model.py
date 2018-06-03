@@ -1,7 +1,7 @@
 import torch
 from models.seq2seq.encoder import encoder_factory
 from models.seq2seq.decoder import decoder_factory
-from models.seq2seq.model import Seq2SeqTrain, Seq2SeqPredictProxy
+from models.seq2seq.model import Seq2SeqTrain, Seq2SeqPredict
 from constants import PAD_TOKEN
 
 
@@ -26,4 +26,4 @@ def train_model_factory(args, field, vocab_size):
 def predict_model_factory(args, model_path, field, vocab_size):
     train_model = train_model_factory(args, field, vocab_size)
     train_model.load_state_dict(torch.load(model_path, map_location=lambda storage, loc: storage))
-    return Seq2SeqPredictProxy(train_model.encoder, train_model.decoder, field)
+    return Seq2SeqPredict(train_model.encoder, train_model.decoder, field)
