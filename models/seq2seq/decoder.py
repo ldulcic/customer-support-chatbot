@@ -2,36 +2,37 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from abc import ABC, abstractmethod
+from .embeddings import embeddings_factory
 from .attention import attention_factory
 from .decoder_init import decoder_init_factory
 
 
-def bahdanau_decoder_factory(args, attn, init, vocab_size, padding_idx):
+def bahdanau_decoder_factory(args, embed, attn, init, metadata):
     return BahdanauDecoder(
         rnn_cls=getattr(nn, args.encoder_rnn_cell),  # gets LSTM or GRU constructor from nn module
+        embed=embed,
         attn=attn,
         init_hidden=init,
-        vocab_size=vocab_size,
+        vocab_size=metadata.vocab_size,
         embed_size=args.embedding_size,
         rnn_hidden_size=args.decoder_hidden_size,
         encoder_hidden_size=args.encoder_hidden_size * (2 if args.encoder_bidirectional else 1),
-        padding_idx=padding_idx,
         num_layers=args.decoder_num_layers,
         dropout=args.decoder_rnn_dropout
     )
 
 
-def luong_decoder_factory(args, attn, init, vocab_size, padding_idx):
+def luong_decoder_factory(args, embed, attn, init, metadata):
     return LuongDecoder(
         rnn_cls=getattr(nn, args.encoder_rnn_cell),  # gets LSTM or GRU constructor from nn module
+        embed=embed,
         attn=attn,
         init_hidden=init,
-        vocab_size=vocab_size,
+        vocab_size=metadata.vocab_size,
         embed_size=args.embedding_size,
         rnn_hidden_size=args.decoder_hidden_size,
         attn_hidden_projection_size=args.luong_attn_hidden_size,
         encoder_hidden_size=args.encoder_hidden_size * (2 if args.encoder_bidirectional else 1),
-        padding_idx=padding_idx,
         num_layers=args.decoder_num_layers,
         dropout=args.decoder_rnn_dropout,
         input_feed=args.luong_input_feed
@@ -44,14 +45,15 @@ decoder_map = {
 }
 
 
-def decoder_factory(args, vocab_size, padding_idx):
+def decoder_factory(args, metadata):
     """
     Returns instance of ``Decoder`` based on provided args.
     """
     # TODO what if attention type is 'none' ?
+    embed = embeddings_factory(args, metadata)
     attn = attention_factory(args)
     init = decoder_init_factory(args)
-    return decoder_map[args.decoder_type](args, attn, init, vocab_size, padding_idx)
+    return decoder_map[args.decoder_type](args, embed, attn, init, metadata)
 
 
 class Decoder(ABC, nn.Module):
@@ -191,6 +193,7 @@ class BahdanauDecoder(Decoder):
     use `bahdanau` decoder init function, use ``GRU`` RNN cell and make your encoder bi-directional.
 
     :param rnn_cls: RNN callable constructor. RNN is either LSTM or GRU.
+    :param embed: Embedding layer.
     :param attn: Attention layer.
     :param init_hidden: Function for generating initial RNN hidden state.
     :param vocab_size: Size of vocabulary over which we operate.
@@ -198,7 +201,6 @@ class BahdanauDecoder(Decoder):
     :param rnn_hidden_size: Dimensionality of RNN hidden representation.
     :param encoder_hidden_size: Dimensionality of encoder hidden representation (important for calculating attention
                                 context)
-    :param padding_idx: Index of pad token in vocabulary.
     :param num_layers: Number of layers in RNN. Default: 1.
     :param dropout: RNN dropout layers mask probability. Default: 0.2.
 
@@ -224,8 +226,8 @@ class BahdanauDecoder(Decoder):
 
     args = [LAST_STATE]
 
-    def __init__(self, rnn_cls, attn, init_hidden, vocab_size, embed_size, rnn_hidden_size, encoder_hidden_size,
-                 padding_idx, num_layers=1, dropout=0.2):
+    def __init__(self, rnn_cls, embed, attn, init_hidden, vocab_size, embed_size, rnn_hidden_size, encoder_hidden_size,
+                 num_layers=1, dropout=0.2):
         super(BahdanauDecoder, self).__init__()
 
         self.args_init = {
@@ -239,7 +241,7 @@ class BahdanauDecoder(Decoder):
         self._num_layers = num_layers
 
         self.initial_hidden = init_hidden
-        self.embed = nn.Embedding(num_embeddings=vocab_size, embedding_dim=embed_size, padding_idx=padding_idx)
+        self.embed = embed
         self.rnn = rnn_cls(input_size=embed_size + encoder_hidden_size,
                            hidden_size=rnn_hidden_size,
                            num_layers=num_layers,
@@ -295,6 +297,7 @@ class LuongDecoder(Decoder):
     supports all variations of Luong decoder, plus you can try out this decoder with GRU RNN cell (Luong used only LSTM)
 
     :param rnn_cls: RNN callable constructor. RNN is either LSTM or GRU.
+    :param embed: Embedding layer.
     :param attn: Attention layer.
     :param init_hidden: Function for generating initial RNN hidden state.
     :param vocab_size: Size of vocabulary over which we operate.
@@ -304,7 +307,6 @@ class LuongDecoder(Decoder):
                                 attention context. h_att = tanh( W * [c;h_rnn] )
     :param encoder_hidden_size: Dimensionality of encoder hidden representation (important for calculating attention
                                 context)
-    :param padding_idx: Index of pad token in vocabulary.
     :param num_layers: Number of layers in RNN. Default: 1.
     :param dropout: RNN dropout layers mask probability. Default: 0.2.
     :param input_feed: If True input feeding approach will be used. Input feeding approach feeds previous attentional
@@ -335,8 +337,8 @@ class LuongDecoder(Decoder):
 
     args = [LAST_STATE]
 
-    def __init__(self, rnn_cls, attn, init_hidden, vocab_size, embed_size, rnn_hidden_size, attn_hidden_projection_size,
-                 encoder_hidden_size, padding_idx, num_layers=1, dropout=0.2, input_feed=False):
+    def __init__(self, rnn_cls, embed, attn, init_hidden, vocab_size, embed_size, rnn_hidden_size,
+                 attn_hidden_projection_size, encoder_hidden_size, num_layers=1, dropout=0.2, input_feed=False):
         super(LuongDecoder, self).__init__()
 
         if input_feed:
@@ -355,7 +357,7 @@ class LuongDecoder(Decoder):
         self.attn_hidden_projection_size = attn_hidden_projection_size
 
         rnn_input_size = embed_size + (attn_hidden_projection_size if input_feed else 0)
-        self.embed = nn.Embedding(num_embeddings=vocab_size, embedding_dim=embed_size, padding_idx=padding_idx)
+        self.embed = embed
         self.rnn = rnn_cls(input_size=rnn_input_size,
                            hidden_size=rnn_hidden_size,
                            num_layers=num_layers,

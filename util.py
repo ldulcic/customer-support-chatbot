@@ -1,4 +1,5 @@
 import torch.nn as nn
+import collections
 
 
 def embedding_size_from_name(name):
@@ -30,3 +31,7 @@ class RNNWrapper(nn.Module):
         if self.rnn_type == self.LSTM:
             hidden, s = hidden  # ignore LSTM cell state s
         return rnn_out, hidden
+
+
+# Metadata used to describe dataset
+Metadata = collections.namedtuple('Metadata', 'vocab_size padding_idx vectors')

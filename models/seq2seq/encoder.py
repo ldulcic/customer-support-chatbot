@@ -1,15 +1,16 @@
 import torch.nn as nn
 from util import RNNWrapper
 from abc import ABC, abstractmethod
+from .embeddings import embeddings_factory
 
 
-def encoder_factory(args, vocab_size, padding_idx):
+def encoder_factory(args, metadata):
+    embed = embeddings_factory(args, metadata)
     return SimpleEncoder(
         rnn_cls=getattr(nn, args.encoder_rnn_cell),  # gets LSTM or GRU constructor from nn module
-        vocab_size=vocab_size,
+        embed=embed,
         embed_size=args.embedding_size,
         hidden_size=args.encoder_hidden_size,
-        padding_idx=padding_idx,
         num_layers=args.encoder_num_layers,
         dropout=args.encoder_rnn_dropout,
         bidirectional=args.encoder_bidirectional
@@ -55,7 +56,7 @@ class SimpleEncoder(Encoder):
     Encoder for seq2seq models.
 
     :param rnn_cls: RNN callable constructor. RNN is either LSTM or GRU.
-    :param vocab_size: Size of vocabulary over which we operate.
+    :param embed: Embedding layer.
     :param embed_size: Dimensionality of word embeddings.
     :param hidden_size: Dimensionality of RNN hidden representation.
     :param num_layers: Number of layers in RNN. Default: 1.
@@ -72,7 +73,7 @@ class SimpleEncoder(Encoder):
                     timestamp)
     """
 
-    def __init__(self, rnn_cls, vocab_size, embed_size, hidden_size, padding_idx, num_layers=1, dropout=0.2,
+    def __init__(self, rnn_cls, embed, embed_size, hidden_size, num_layers=1, dropout=0.2,
                  bidirectional=False):
         super(SimpleEncoder, self).__init__()
 
@@ -80,7 +81,7 @@ class SimpleEncoder(Encoder):
         self._bidirectional = bidirectional
         self._num_layers = num_layers
 
-        self.embed = nn.Embedding(num_embeddings=vocab_size, embedding_dim=embed_size, padding_idx=padding_idx)
+        self.embed = embed
         self.rnn = RNNWrapper(rnn_cls(input_size=embed_size,
                                       hidden_size=hidden_size,
                                       num_layers=num_layers,

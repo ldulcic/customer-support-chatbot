@@ -1,6 +1,7 @@
 import torch
-import dill
+import pickle
 import os
+from constants import MODEL_FORMAT
 
 
 def ensure_dir_exists(path):
@@ -8,34 +9,28 @@ def ensure_dir_exists(path):
         os.makedirs(path)
 
 
-# def save_field_and_args(dir_path, field, args):
-#     ensure_dir_exists(dir_path)
-#     with open(dir_path + '/field.dill', 'wb') as fd:
-#         dill.dump(field, fd)
-#     with open(dir_path + '/args.dill', 'wb') as fd:
-#         dill.dump(args, fd)
-#
-#
-# def load_field_and_args(dir_path):
-#     with open(dir_path + '/field.dill', 'rb') as fd:
-#         field = dill.load(fd)
-#     with open(dir_path + '/args.dill', 'rb') as fd:
-#         args = dill.load(fd)
-#     return field, args
-
-
 def save_object(obj, path):
     ensure_dir_exists(os.path.dirname(path))
     with open(path, 'wb') as fd:
-        dill.dump(obj, fd)
+        pickle.dump(obj, fd)
 
 
 def load_object(path):
     with open(path, 'rb') as fd:
-        obj = dill.load(fd)
+        obj = pickle.load(fd)
     return obj
+
+
+def save_vocab(vocab, path):
+    """
+    Saves Torchtext Field vocabulary. WARNING this method will erase vocab vectors!
+    """
+    # erasing vectors because we don't need them and they cause problems when loading model on CPU when model was
+    # trained on GPU
+    vocab.vectors = None
+    save_object(vocab, path)
 
 
 def save_model(dir_path, model, epoch, train_loss, val_loss):
     ensure_dir_exists(dir_path)
-    torch.save(model.state_dict(), "%s/seq2seq-%d-%f-%f.pt" % (dir_path, epoch, train_loss, val_loss))
+    torch.save(model.state_dict(), dir_path + os.path.sep + (MODEL_FORMAT % (epoch, train_loss, val_loss)))

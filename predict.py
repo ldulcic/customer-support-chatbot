@@ -2,9 +2,12 @@
 
 import torch
 import torch.nn as nn
+import os
 import argparse
 from model import predict_model_factory
+from dataset import field_factory, metadata_factory
 from serialization import load_object
+from constants import MODEL_START_FORMAT
 
 
 class ModelDecorator(nn.Module):
@@ -24,33 +27,44 @@ class ModelDecorator(nn.Module):
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Script for "talking" with pre-trained chatbot.')
-    parser.add_argument('-m', '--model-path', required=True, help='Path to pre-trained pytorch model.')
-    parser.add_argument('-f', '--field-path', required=True, help='Path to serialized field object.')
-    parser.add_argument('-a', '--args-path', required=True, help='Path to serialized arguments object.')
-    parser.add_argument('--cuda', action='store_true', default=False, help='Use cuda if available.')
+    parser.add_argument('-p', '--model-path', required=True,
+                        help='Path to directory with model args, vocabulary and pre-trained pytorch models.')
+    parser.add_argument('-e', '--epoch', type=int, help='Model from this epoch will be loaded.')
     parser.add_argument('--sampling-strategy', choices=['greedy', 'random', 'beam_search'], default='greedy',
                         help='Strategy for sampling output sequence.')
     parser.add_argument('--max-seq-len', type=int, default=50, help='Maximum length for output sequence.')
+    parser.add_argument('--cuda', action='store_true', default=False, help='Use cuda if available.')
     return parser.parse_args()
 
 
+def get_model_path(dir_path, epoch):
+    name_start = MODEL_START_FORMAT % epoch
+    for path in os.listdir(dir_path):
+        if path.startswith(name_start):
+            return dir_path + path
+    raise ValueError("Model from epoch %d doesn't exist in %s" % (epoch, dir_path))
+
+
 def main():
-    # os.environ['CUDA_VISIBLE_DEVICES'] = '1'
     torch.set_grad_enabled(False)
     args = parse_args()
-    print('parsed args')
-    model_args = load_object(args.args_path)
-    print('args loaded')
-    field = load_object(args.field_path)
-    print('field loaded')
+    print('Args loaded')
+    model_args = load_object(args.model_path + os.path.sep + 'args')
+    print('Model args loaded.')
+    vocab = load_object(args.model_path + os.path.sep + 'vocab')
+    print('Vocab loaded.')
 
     cuda = torch.cuda.is_available() and args.cuda
     torch.set_default_tensor_type(torch.cuda.FloatTensor if cuda else torch.FloatTensor)
     device = torch.device('cuda' if cuda else 'cpu')
+    print("Using %s for inference" % ('GPU' if cuda else 'CPU'))
 
-    vocab_size = len(field.vocab)
+    field = field_factory(model_args, device)
+    field.vocab = vocab
+    metadata = metadata_factory(model_args, vocab)
 
-    model = ModelDecorator(predict_model_factory(model_args, args.model_path, field, vocab_size))
+    model = ModelDecorator(
+        predict_model_factory(model_args, metadata, get_model_path(args.model_path + os.path.sep, args.epoch), field))
     print('model loaded')
     model.eval()
 
