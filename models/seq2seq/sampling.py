@@ -18,8 +18,8 @@ class SequenceSampler(ABC):
         - **max_length** (scalar): Maximum length of sampled sequence.
 
     Outputs: sequences, lengths
-        - **sequences** (seq_len, batch): Sampled sequences.
-        - **lengths** (batch): Length of sequence for every batch (all sequences are padded except longest one).
+        - **sequences** (max_seq_len, batch): Sampled sequences.
+        - **lengths** (batch): Length of sequence for every batch.
     """
 
     @abstractmethod
@@ -41,11 +41,11 @@ class GreedySampler(SequenceSampler):
         - **max_length** (scalar): Maximum length of sampled sequence.
 
     Outputs: sequences, lengths
-        - **sequences** (seq_len, batch): Sampled sequences.
-        - **lengths** (batch): Length of sequence for every batch (all sequences are padded except longest one).
+        - **sequences** (batch, max_seq_len): Sampled sequences.
+        - **lengths** (batch): Length of sequence for every batch.
     """
     def sample(self, encoder_outputs, h_n, decoder, sos_idx, eos_idx, max_length):
-        batch_size = encoder_outputs.size(0)
+        batch_size = encoder_outputs.size(1)
         sequences = None
 
         input_word = torch.tensor([sos_idx] * batch_size)
@@ -53,6 +53,7 @@ class GreedySampler(SequenceSampler):
         for t in range(max_length):
             output, attn_weights, kwargs = decoder(t, input_word, encoder_outputs, h_n, **kwargs)
             _, argmax = output.max(dim=1)  # greedily take the most probable word
+            input_word = argmax
             argmax = argmax.unsqueeze(1)  # (batch) -> (batch, 1) because of concatenating to sequences
             sequences = argmax if sequences is None else torch.cat([sequences, argmax], dim=1)
 
@@ -77,19 +78,19 @@ class RandomSampler(SequenceSampler):
         - **max_length** (scalar): Maximum length of sampled sequence.
 
     Outputs: sequences, lengths
-        - **sequences** (seq_len, batch): Sampled sequences.
-        - **lengths** (batch): Length of sequence for every batch (all sequences are padded except longest one).
+        - **sequences** (batch, max_seq_len): Sampled sequences.
+        - **lengths** (batch): Length of sequence for every batch.
     """
     def sample(self, encoder_outputs, h_n, decoder, sos_idx, eos_idx, max_length):
-        batch_size = encoder_outputs.size(0)
+        batch_size = encoder_outputs.size(1)
         sequences = None
 
         input_word = torch.tensor([sos_idx] * batch_size)
         kwargs = {}
         for t in range(max_length):
             output, attn_weights, kwargs = decoder(t, input_word, encoder_outputs, h_n, **kwargs)
-            indices = torch.multinomial(F.softmax(output, dim=1), 1)  # roulette-wheel selection of tokens with probability as weights
-            indices = indices.unsqueeze(1)  # (batch) -> (batch, 1) because of concatenating to sequences
+            indices = torch.multinomial(F.softmax(output, dim=1), 1)  # roulette-wheel selection of tokens with probability as weights (batch, 1)
+            input_word = indices.squeeze(1)  # (batch, 1) -> (batch)
             sequences = indices if sequences is None else torch.cat([sequences, indices], dim=1)
 
         # calculate lengths
