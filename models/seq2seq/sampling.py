@@ -57,6 +57,10 @@ class GreedySampler(SequenceSampler):
             argmax = argmax.unsqueeze(1)  # (batch) -> (batch, 1) because of concatenating to sequences
             sequences = argmax if sequences is None else torch.cat([sequences, argmax], dim=1)
 
+        # ensure there is EOS token at the end of every sequence (important for calculating lengths)
+        end = torch.tensor([eos_idx] * batch_size).unsqueeze(1)  # (batch, 1)
+        sequences = torch.cat([sequences, end], dim=1)
+
         # calculate lengths
         _, lengths = (sequences == eos_idx).max(dim=1)
 
@@ -92,6 +96,10 @@ class RandomSampler(SequenceSampler):
             indices = torch.multinomial(F.softmax(output, dim=1), 1)  # roulette-wheel selection of tokens with probability as weights (batch, 1)
             input_word = indices.squeeze(1)  # (batch, 1) -> (batch)
             sequences = indices if sequences is None else torch.cat([sequences, indices], dim=1)
+
+        # ensure there is EOS token at the end of every sequence (important for calculating lengths)
+        end = torch.tensor([eos_idx] * batch_size).unsqueeze(1)  # (batch, 1)
+        sequences = torch.cat([sequences, end], dim=1)
 
         # calculate lengths
         _, lengths = (sequences == eos_idx).max(dim=1)
