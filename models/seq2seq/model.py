@@ -88,15 +88,15 @@ class Seq2SeqPredictProxy(Seq2SeqPredict):
         self.field = field
 
     def forward(self, question, sampling_strategy='greedy', max_seq_len=50):
-        q = self.field.numericalize(question)
+        q = self.field.process([self.field.preprocess(question)])
         sequences, lengths = super().forward(q, sampling_strategy, max_seq_len)
 
-        batch_size = sequences.size(1)
+        batch_size = sequences.size(0)
         sequences, lengths = sequences.tolist(), lengths.tolist()
 
         seqs = []
         for batch in range(batch_size):
-            seq = sequences[:lengths[batch], batch]
+            seq = sequences[batch][:lengths[batch]]
             seqs.append(' '.join(map(lambda tok: self.field.vocab.itos[tok], seq)))
 
         return seqs
