@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import random
+import string
 from constants import SOS_TOKEN, EOS_TOKEN
 from .sampling import GreedySampler, RandomSampler, BeamSearch
 
@@ -89,6 +90,21 @@ class Seq2SeqPredict(nn.Module):
             'beam_search': BeamSearch()
         }
 
+    def decode_sequence(self, tokens_idx):
+        """
+        Decodes token indices to string.
+
+        :param tokens_idx: List of token indices.
+        :return: String representing decoded sequence.
+        """
+        seq = ''
+        for idx in tokens_idx:
+            tok = self.field.vocab.itos[idx]
+            if tok not in string.punctuation:
+                seq += ' '
+            seq += tok
+        return seq.strip()
+
     def forward(self, questions, sampling_strategy, max_seq_len):
         # raw strings to tensor
         q = self.field.process(self.field.preprocess(questions))
@@ -108,6 +124,6 @@ class Seq2SeqPredict(nn.Module):
         seqs = []
         for batch in range(batch_size):
             seq = sequences[batch][:lengths[batch]]
-            seqs.append(' '.join(map(lambda tok: self.field.vocab.itos[tok], seq)))
+            seqs.append(self.decode_sequence(seq))
 
         return seqs

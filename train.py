@@ -192,7 +192,7 @@ def main():
                 print('Done)', end='')
                 best_val_loss = val_loss
             print()
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, BrokenPipeError):
         print('[Ctrl-C] Training stopped.')
 
     test_loss = evaluate(model, test_iter, metadata)
