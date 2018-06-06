@@ -26,7 +26,8 @@ def parse_args():
                         help='Folder where models (and other configs) will be saved during training.')
     parser.add_argument('--save-every-epoch', action='store_true',
                         help='Save model every epoch regardless of validation loss.')
-    parser.add_argument('--dataset', choices=['twitter-apple', 'twitter-small'], help='Dataset for training model.')
+    parser.add_argument('--dataset', choices=['twitter-apple', 'twitter-all', 'twitter-small'],
+                        help='Dataset for training model.')
     parser.add_argument('--teacher-forcing-ratio', type=float, default=0.5,
                         help='Teacher forcing ratio used in seq2seq models. [0-1]')
 
