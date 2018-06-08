@@ -100,14 +100,14 @@ class Seq2SeqPredict(nn.Module):
         seq = ''
         for idx in tokens_idx:
             tok = self.field.vocab.itos[idx]
-            if tok not in string.punctuation:
+            if tok not in string.punctuation and tok[0] != '\'':
                 seq += ' '
             seq += tok
         return seq.strip()
 
     def forward(self, questions, sampling_strategy, max_seq_len):
         # raw strings to tensor
-        q = self.field.process(self.field.preprocess(questions))
+        q = self.field.process([self.field.preprocess(question) for question in questions])
 
         # encode question sequence
         encoder_outputs, h_n = self.encoder(q)
