@@ -22,14 +22,15 @@ def load_field(device):
 
 def load_dataset(args, device):
     field = load_field(device)
+    dataset = args.dataset.split('-')[1]  # remove "twitter-" from beginning
 
     # load dataset
     train, val, test = data.TabularDataset.splits(
         path='data/twitter_customer_support',
         format='tsv',
-        train=args.dataset + '-train.tsv',
-        validation=args.dataset + '-val.tsv',
-        test=args.dataset + '-test.tsv',
+        train=dataset + '-train.tsv',
+        validation=dataset + '-val.tsv',
+        test=dataset + '-test.tsv',
         fields=[
             ('author_id', None),
             ('question', field),
