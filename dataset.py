@@ -9,6 +9,9 @@ METADATA_IDX = 2
 
 dataset_field_map = {
     'twitter-apple': (twitter_dataset, twitter_field, twitter_metadata),
+    'twitter-amazonhelp': (twitter_dataset, twitter_field, twitter_metadata),
+    'twitter-delta': (twitter_dataset, twitter_field, twitter_metadata),
+    'twitter-spotifycares': (twitter_dataset, twitter_field, twitter_metadata),
     'twitter-all': (twitter_dataset, twitter_field, twitter_metadata),
     'twitter-small': (twitter_dataset, twitter_field, twitter_metadata)
 }
