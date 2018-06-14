@@ -56,5 +56,24 @@ class BahdanauInit(DecoderInit):
         batch_size = h_n.size(1)
         backward_h = h_n[torch.range(1, num_hidden_states, 2).long()]  # take backward encoder RNN states
         hidden = F.tanh(self.linear(backward_h))
+        hidden = self.adjust_hidden_size(hidden)
         return hidden if self.rnn_cell_type == GRU else (hidden, torch.zeros(self.decoder_num_layers, batch_size,
                                                                              self.decoder_hidden_size))
+
+    def adjust_hidden_size(self, hidden):
+        """
+        If encoder and decoder have different number of layers adjust size of initial hidden state for decoder
+        by padding with zeros (when decoder has more layers) or slicing hidden state (when encoder has more layers)
+        """
+        num_layers = hidden.size(0)
+        batch_size = hidden.size(1)
+        hidden_size = hidden.size(2)
+
+        if num_layers < self.decoder_num_layers:
+            hidden = torch.cat([hidden, torch.zeros(self.decoder_num_layers - num_layers, batch_size, hidden_size)],
+                               dim=0)
+
+        if num_layers > self.decoder_num_layers:
+            hidden = hidden[:self.decoder_num_layers]
+
+        return hidden
