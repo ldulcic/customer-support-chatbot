@@ -15,11 +15,15 @@ def id2text(df, x):
 
 
 def clean_tweet(tweet):
-    # TODO think about not removing numbers when preprocessing (uncomment line below)
-    # p.set_options(p.OPT.URL, p.OPT.EMOJI, p.OPT.MENTION, p.OPT.HASHTAG)
-    # TODO think about replacing hashtags/emojis/etc. with specials word using p.tokenize
-    # removes @ mentions, urls, hashtags and emojis
+    # removes @ mentions, hashtags, emojis, twitter reserved words and numbers
+    p.set_options(p.OPT.EMOJI, p.OPT.MENTION, p.OPT.RESERVED, p.OPT.SMILEY, p.OPT.NUMBER)
     clean = p.clean(tweet)
+
+    # transforms every url to "<url>" token and every hashtag to "<hashtag>" token
+    p.set_options(p.OPT.EMOJI, p.OPT.MENTION, p.OPT.RESERVED, p.OPT.SMILEY, p.OPT.NUMBER, p.OPT.HASHTAG, p.OPT.URL)
+    clean = p.tokenize(clean)
+    clean = re.sub(r'\$HASHTAG\$', '<hashtag>', clean)
+    clean = re.sub(r'\$URL\$', '<url>', clean)
 
     # preprocessor doesn't seem to clean all emojis so we run text trough emoji regex to clean leftovers
     clean = re.sub(emoji.get_emoji_regexp(), '', clean)
@@ -110,12 +114,12 @@ def create_dataset(df, author_ids, nlp):
     return dataset
 
 
-def create_apple_dataset(df, nlp, path):
+def create_and_write_dataset(df, nlp, author_id, path):
     """
     Creates tsv dataset which contains only Apple support conversations with customers.
     """
-    dataset = create_dataset(df, ['AppleSupport'], nlp)
-    dataset_path = path + 'applesupport' + '.tsv'
+    dataset = create_dataset(df, [author_id], nlp)
+    dataset_path = path + author_id.lower() + '.tsv'
     dataset.to_csv(dataset_path, sep='\t', index=False)
     split_dataset(dataset_path)
 
@@ -143,7 +147,12 @@ def main():
     nlp.add_pipe(LanguageDetector())
 
     # create_apple_dataset(df, nlp, '../../data/twitter_customer_support/')
-    create_all_dataset(df, nlp, '../../data/twitter_customer_support/')
+    # create_all_dataset(df, nlp, '../../data/twitter_customer_support/')
+    create_and_write_dataset(df, nlp, 'AppleSupport', '../../data/twitter_customer_support/')
+    create_and_write_dataset(df, nlp, 'AmazonHelp', '../../data/twitter_customer_support/')
+    create_and_write_dataset(df, nlp, 'Uber_Support', '../../data/twitter_customer_support/')
+    create_and_write_dataset(df, nlp, 'Delta', '../../data/twitter_customer_support/')
+    create_and_write_dataset(df, nlp, 'SpotifyCares', '../../data/twitter_customer_support/')
 
 
 if __name__ == '__main__':
