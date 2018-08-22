@@ -25,16 +25,34 @@ class ModelDecorator(nn.Module):
         return self.model([question], sampling_strategy, max_seq_len)[0]
 
 
+customer_service_models = {
+    'apple': ('pretrained-models/apple', 39),
+    'amazon': ('pretrained-models/amazon', 10),
+    'uber': ('pretrained-models/uber', 58),
+    'delta': ('pretrained-models/delta', 44),
+    'spotify': ('pretrained-models/spotify', 14)
+}
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Script for "talking" with pre-trained chatbot.')
-    parser.add_argument('-p', '--model-path', required=True,
+    parser.add_argument('-cs', '--customer-service', choices=['apple', 'amazon', 'uber', 'delta', 'spotify'])
+    parser.add_argument('-p', '--model-path',
                         help='Path to directory with model args, vocabulary and pre-trained pytorch models.')
     parser.add_argument('-e', '--epoch', type=int, help='Model from this epoch will be loaded.')
     parser.add_argument('--sampling-strategy', choices=['greedy', 'random', 'beam_search'], default='greedy',
                         help='Strategy for sampling output sequence.')
     parser.add_argument('--max-seq-len', type=int, default=50, help='Maximum length for output sequence.')
     parser.add_argument('--cuda', action='store_true', default=False, help='Use cuda if available.')
-    return parser.parse_args()
+
+    args = parser.parse_args()
+
+    if args.customer_service:
+        cs = customer_service_models[args.customer_service]
+        args.model_path = cs[0]
+        args.epoch = cs[1]
+
+    return args
 
 
 def get_model_path(dir_path, epoch):
