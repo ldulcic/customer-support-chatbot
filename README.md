@@ -114,6 +114,7 @@ Attention:
   --concat-attention-hidden-size CONCAT_ATTENTION_HIDDEN_SIZE
                         Attention layer hidden size. Used only with concat
                         score function.
+
 ```
 
 
@@ -139,4 +140,19 @@ optional arguments:
   --max-seq-len MAX_SEQ_LEN
                         Maximum length for output sequence.
   --cuda                Use cuda if available.
+```
+
+# Using pre-trained models
+
+After cloning this repository, run following commands in root of this repository to download pre-trained customer service chatbots.
+
+```
+wget https://www.dropbox.com/s/ibm49gx1gefpqju/pretrained-models.zip
+unzip pretrained-models.zip
+sudo chmod +x predict.py
+```
+
+Now you can "talk" with customer service chatbots using `predict.py` script. Following customer service chatbots are available: `apple,amazon,uber,delta,spotify`. Following example shows how to run `apple` customer service chatbot:
+```
+./predict.py -cs apple
 ```
