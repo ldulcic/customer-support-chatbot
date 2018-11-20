@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from abc import ABC, abstractmethod
 from constants import LSTM, GRU
 
@@ -54,8 +53,8 @@ class BahdanauInit(DecoderInit):
     def forward(self, h_n):
         num_hidden_states = h_n.size(0)
         batch_size = h_n.size(1)
-        backward_h = h_n[torch.range(1, num_hidden_states, 2).long()]  # take backward encoder RNN states
-        hidden = F.tanh(self.linear(backward_h))
+        backward_h = h_n[torch.arange(1, num_hidden_states, 2)]  # take backward encoder RNN states
+        hidden = torch.tanh(self.linear(backward_h))
         hidden = self.adjust_hidden_size(hidden)
         return hidden if self.rnn_cell_type == GRU else (hidden, torch.zeros(self.decoder_num_layers, batch_size,
                                                                              self.decoder_hidden_size))

@@ -30,9 +30,9 @@ def dataset_factory(args, device):
     return dataset_tuple[DATASET_IDX](args, device)
 
 
-def field_factory(args, device):
+def field_factory(args):
     dataset_tuple = get_dataset_tuple(args)
-    return dataset_tuple[FIELD_IDX](device)
+    return dataset_tuple[FIELD_IDX]()
 
 
 def metadata_factory(args, vocab):

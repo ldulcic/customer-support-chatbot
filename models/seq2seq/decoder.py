@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from abc import ABC, abstractmethod
 from .embeddings import embeddings_factory
 from .attention import attention_factory
@@ -401,7 +400,7 @@ class LuongDecoder(Decoder):
 
         # attention context
         attn_weights, context = self.attn(t, hidden[-1], encoder_outputs)
-        attn_hidden = F.tanh(self.attn_hidden_lin(torch.cat([context, hidden[-1]], dim=1)))  # (batch, attn_hidden)
+        attn_hidden = torch.tanh(self.attn_hidden_lin(torch.cat([context, hidden[-1]], dim=1)))  # (batch, attn_hidden)
 
         # calculate logits
         output = self.out(attn_hidden)

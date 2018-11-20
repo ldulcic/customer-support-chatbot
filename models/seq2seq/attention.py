@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 from abc import ABC, abstractmethod
-from util import print_dim
 
 """
 This file contains implementations of various attention mechanisms for RNN-based seq2seq models.
@@ -204,7 +203,7 @@ class LocalPredictiveAttention(Attention):
         :param seq_len: Sequence length for current batch.
         :return: pt (batch) Predicted window positions for whole batch.
         """
-        Wph = F.tanh(self.Wp(hidden))
+        Wph = torch.tanh(self.Wp(hidden))
         p = seq_len * F.sigmoid(self.vp(Wph))
         return p.squeeze(1)
 
@@ -364,7 +363,7 @@ class ConcatAttention(AttentionScore):
         seq_len = encoder_outputs.size(0)
         h = hidden.expand(seq_len, -1, -1)  # (batch, hidden_size) -> (seq_len, batch, hidden_size)
         scores = self.W(torch.cat([encoder_outputs, h], dim=2))  # (seq_len, batch, attn_h)
-        scores = self.v(F.tanh(scores))  # (seq_len, batch, 1)
+        scores = self.v(torch.tanh(scores))  # (seq_len, batch, 1)
         return scores.squeeze(2).transpose(0, 1)
 
 

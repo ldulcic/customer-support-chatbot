@@ -1,4 +1,3 @@
-import torch
 from torchtext import data
 from constants import SOS_TOKEN, EOS_TOKEN, PAD_TOKEN
 from util import Metadata
@@ -11,17 +10,16 @@ def load_metadata(vocab):
     return Metadata(vocab_size=len(vocab), padding_idx=vocab.stoi[PAD_TOKEN], vectors=vocab.vectors)
 
 
-def load_field(device):
+def load_field():
     """
     Loads field for twitter dataset.
     """
     return data.Field(init_token=SOS_TOKEN, eos_token=EOS_TOKEN, pad_token=PAD_TOKEN,
-                      tokenize='spacy', lower=True,
-                      tensor_type=torch.cuda.LongTensor if device.type == 'cuda' else torch.LongTensor)
+                      tokenize='spacy', lower=True)
 
 
 def load_dataset(args, device):
-    field = load_field(device)
+    field = load_field()
     dataset = args.dataset.split('-')[1]  # remove "twitter-" from beginning
 
     # load dataset
