@@ -74,10 +74,9 @@ def main():
 
     cuda = torch.cuda.is_available() and args.cuda
     torch.set_default_tensor_type(torch.cuda.FloatTensor if cuda else torch.FloatTensor)
-    device = torch.device('cuda' if cuda else 'cpu')
     print("Using %s for inference" % ('GPU' if cuda else 'CPU'))
 
-    field = field_factory(model_args, device)
+    field = field_factory(model_args)
     field.vocab = vocab
     metadata = metadata_factory(model_args, vocab)
 
