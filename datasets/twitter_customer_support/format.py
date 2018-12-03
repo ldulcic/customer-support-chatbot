@@ -8,6 +8,9 @@ from sklearn.model_selection import train_test_split
 from spacy_cld import LanguageDetector
 
 
+DATA_FOLDER = 'data/'
+
+
 def id2text(df, x):
     row = df[df.tweet_id == int(x)]
     # some ids are missing, they just don't exist in data
@@ -140,7 +143,7 @@ def create_all_dataset(df, nlp, path):
 
 
 def main():
-    df = pd.read_csv('../../data/twitter_customer_support/twcs.csv')
+    df = pd.read_csv(DATA_FOLDER + 'twcs.csv')
     df.sort_values(by='tweet_id', inplace=True)
 
     nlp = spacy.load('en')
@@ -148,11 +151,11 @@ def main():
 
     # create_apple_dataset(df, nlp, '../../data/twitter_customer_support/')
     # create_all_dataset(df, nlp, '../../data/twitter_customer_support/')
-    create_and_write_dataset(df, nlp, 'AppleSupport', '../../data/twitter_customer_support/')
-    create_and_write_dataset(df, nlp, 'AmazonHelp', '../../data/twitter_customer_support/')
-    create_and_write_dataset(df, nlp, 'Uber_Support', '../../data/twitter_customer_support/')
-    create_and_write_dataset(df, nlp, 'Delta', '../../data/twitter_customer_support/')
-    create_and_write_dataset(df, nlp, 'SpotifyCares', '../../data/twitter_customer_support/')
+    create_and_write_dataset(df, nlp, 'AppleSupport', DATA_FOLDER)
+    create_and_write_dataset(df, nlp, 'AmazonHelp', DATA_FOLDER)
+    create_and_write_dataset(df, nlp, 'Uber_Support', DATA_FOLDER)
+    create_and_write_dataset(df, nlp, 'Delta', DATA_FOLDER)
+    create_and_write_dataset(df, nlp, 'SpotifyCares', DATA_FOLDER)
 
 
 if __name__ == '__main__':
