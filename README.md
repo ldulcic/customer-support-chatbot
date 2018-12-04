@@ -1,8 +1,10 @@
 # About
 Chatbot is a computer program which conducts a conversation in a human-like way. This project implements chatbot which 
-tries to answer users questions as customer support agent. Following customer support chatbots were implemented: Apple, 
-Amazon, Uber, Delta and Spotify. Chatbots were trained on publicly available conversations between customer supports and 
-users on Twitter.
+tries to answer users questions as customer support agent. Following customer support chatbots were implemented: 
+[AppleSupport](https://twitter.com/AppleSupport), [AmazonHelp](https://twitter.com/AmazonHelp), 
+[Uber_Support](https://twitter.com/Uber_Support), [Delta](https://twitter.com/Delta) and 
+[SpotifyCares](https://twitter.com/SpotifyCares). Chatbots were trained on publicly available conversations between 
+customer supports and users on Twitter.
 
 Chatbot is implemented as sequence to sequence deep learning model with attention. Project is mostly based on 
 [Bahdanau et al. 2014](https://arxiv.org/abs/1409.0473), [Luong et al. 2015.](https://arxiv.org/abs/1508.04025) 
@@ -12,11 +14,15 @@ and [Vinyals et al., 2015.](https://arxiv.org/abs/1506.05869).
 Sample conversations with customer support chatbots. Conversations with chatbots are not ideal but show promising 
 results. Chatbot answers are in grey bubbles.
 
-### [AppleSupport](https://twitter.com/AppleSupport)
+## [AppleSupport](https://twitter.com/AppleSupport)
 ![Apple](conversations/apple.png)
-### [AmazonHelp](https://twitter.com/AmazonHelp)
+## [AmazonHelp](https://twitter.com/AmazonHelp)
 ![Amazon](conversations/amazon.png)
-### [SpotifyCares](https://twitter.com/SpotifyCares) 
+## [Uber_Support](https://twitter.com/Uber_Support)
+![Uber](conversations/uber.png)
+## [Delta](https://twitter.com/Delta)
+![Delta](conversations/delta.png)
+## [SpotifyCares](https://twitter.com/SpotifyCares)
 ![Spotify](conversations/spotify.png)
 
 # Dataset 
@@ -55,7 +61,8 @@ project:
 ```bash
 wget https://www.dropbox.com/s/nmnlcncn7jtb7i9/twcs.zip
 unzip twcs.zip
-mv twcs.csv data/twitter_customer_support
+mkdir data
+mv twcs.csv data
 rm twcs.zip
 python3 datasets/twitter_customer_support/format.py # this runs for couple of hours
 sudo chmod +x train.py
