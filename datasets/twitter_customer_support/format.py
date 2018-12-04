@@ -149,8 +149,6 @@ def main():
     nlp = spacy.load('en')
     nlp.add_pipe(LanguageDetector())
 
-    # create_apple_dataset(df, nlp, '../../data/twitter_customer_support/')
-    # create_all_dataset(df, nlp, '../../data/twitter_customer_support/')
     create_and_write_dataset(df, nlp, 'AppleSupport', DATA_FOLDER)
     create_and_write_dataset(df, nlp, 'AmazonHelp', DATA_FOLDER)
     create_and_write_dataset(df, nlp, 'Uber_Support', DATA_FOLDER)
