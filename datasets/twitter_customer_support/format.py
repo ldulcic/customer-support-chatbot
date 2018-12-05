@@ -6,9 +6,7 @@ import re
 import spacy
 from sklearn.model_selection import train_test_split
 from spacy_cld import LanguageDetector
-
-
-DATA_FOLDER = 'data/'
+from . import DATA_FOLDER
 
 
 def id2text(df, x):
