@@ -1,6 +1,7 @@
 from torchtext import data
 from constants import SOS_TOKEN, EOS_TOKEN, PAD_TOKEN
 from util import Metadata
+from . import DATA_FOLDER
 
 
 def load_metadata(vocab):
@@ -24,7 +25,7 @@ def load_dataset(args, device):
 
     # load dataset
     train, val, test = data.TabularDataset.splits(
-        path='data/twitter_customer_support',
+        path=DATA_FOLDER,
         format='tsv',
         train=dataset + '-train.tsv',
         validation=dataset + '-val.tsv',
